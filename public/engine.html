@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RESONANCE · Dantian 丹田</title>
+<style>
+  :root { --bg:#0a0c14; --panel:#121626; --line:#232a40; --text:#e6e9f2; --muted:#8a93ad; --accent:#7fb3ff; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:14px/1.45 system-ui,-apple-system,Segoe UI,sans-serif; height:100vh; display:grid; grid-template-columns: 360px 1fr; }
+  aside { background:var(--panel); border-right:1px solid var(--line); padding:18px; overflow:auto; display:flex; flex-direction:column; gap:16px; }
+  h1 { font-size:13px; letter-spacing:.35em; margin:0; font-weight:600; }
+  h1 small { display:block; letter-spacing:.1em; color:var(--muted); font-weight:400; margin-top:4px; }
+  .row { display:flex; justify-content:space-between; align-items:center; gap:8px; }
+  .label { color:var(--muted); font-size:12px; text-transform:uppercase; letter-spacing:.08em; }
+  #pos { font: 600 28px ui-monospace, Menlo, monospace; }
+  #urls a { color:var(--accent); font-family:ui-monospace,Menlo,monospace; font-size:13px; }
+  #conn.ok { color:#6fd39b; } #conn.bad { color:#ef8a7a; }
+  select, input[type=range] { width:100%; }
+  select { background:#0d1020; color:var(--text); border:1px solid var(--line); border-radius:6px; padding:6px; }
+  button { font:inherit; color:var(--text); background:#1b2136; border:1px solid var(--line); border-radius:8px; padding:8px 10px; cursor:pointer; }
+  button:hover { border-color:#3a4566; }
+  .ghead { display:flex; flex-direction:column; gap:1px; margin-top:8px; font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); } .ghead:first-child { margin-top:0; } .ghead span { text-transform:none; letter-spacing:0; font-size:11px; opacity:.8; }
+  #stems { display:flex; flex-direction:column; gap:6px; }
+  .stemrow { display:flex; gap:6px; align-items:stretch; }
+  .stemrow .stem { flex:1; }
+  .stemrow .xy-mini { position:relative; right:auto; bottom:auto; align-self:center; flex:none; }
+  .stem { display:grid; grid-template-columns: 14px 1fr auto; grid-template-rows:auto auto; column-gap:10px; text-align:left; padding:8px 10px; }
+  .stem .dot { grid-row:1/3; align-self:center; width:12px; height:12px; border-radius:50%; border:2px solid var(--c); }
+  .stem .name { font-weight:600; } .stem .role { grid-column:2; color:var(--muted); font-size:12px; }
+  .stem .st { grid-row:1/3; grid-column:3; align-self:center; font-size:12px; color:var(--muted); }
+  .stem[data-state=playing] .dot { background:var(--c); box-shadow:0 0 10px var(--c); }
+  .stem[data-state=playing] { border-color:var(--c); }
+  .stem[data-state=starting] .dot, .stem[data-state=stopping] .dot { animation: blink .4s infinite alternate; background:var(--c); }
+  @keyframes blink { to { opacity:.2; } }
+  #packBtn { display:flex; flex-direction:column; align-items:flex-start; gap:2px; text-align:left; width:100%; padding:10px 12px; background:#1b2136; }
+  #packBtn b { font-size:15px; font-weight:650; } #packBtn .go { color:var(--accent); font-size:12px; }
+  #packStatus { color:var(--muted); font-size:12px; min-height:1.2em; margin-top:4px; }
+  #srv { color:var(--muted); font-size:12px; display:flex; flex-direction:column; gap:6px; }
+  #updateBar { background:#1d3b2c; border:1px solid #2e6b4b; color:#cfffe3; padding:8px 10px; border-radius:8px; display:flex; justify-content:space-between; align-items:center; gap:8px; }
+  #updateBar[hidden] { display:none; }
+  #packs { position:fixed; inset:0; z-index:900; background:rgba(6,8,14,.86); backdrop-filter:blur(6px); display:flex; align-items:center; justify-content:center; padding:20px; }
+  #packs[hidden] { display:none; }
+  .sheet { width:min(760px,100%); max-height:100%; background:#11152a; border:1px solid var(--line); border-radius:18px; display:flex; flex-direction:column; overflow:hidden; }
+  .sheet > header { display:flex; justify-content:space-between; align-items:center; gap:10px; padding:14px 18px; border-bottom:1px solid var(--line); }
+  .sheet > header h2 { margin:0; font-size:17px; } .sheet > header small { display:block; color:var(--muted); font-weight:400; font-size:12px; }
+  #packList { overflow:auto; padding:14px 18px; display:flex; flex-direction:column; gap:12px; }
+  .sheet > footer { padding:10px 18px; border-top:1px solid var(--line); color:var(--muted); font-size:12px; display:flex; justify-content:space-between; align-items:center; gap:10px; }
+  .pack { border:1px solid var(--line); border-radius:14px; padding:12px 14px; background:#0e1224; display:flex; flex-direction:column; gap:8px; }
+  .pack.active { border-color:var(--accent); box-shadow:0 0 0 1px var(--accent) inset; }
+  .pack.off { opacity:.7; }
+  .pack > header { display:flex; align-items:center; gap:8px; } .pack > header b { font-size:16px; }
+  .pack .pd { margin:0; color:#b9c0d6; }
+  .badges, .chips { display:flex; flex-wrap:wrap; gap:6px; }
+  .badge { font-size:11px; padding:2px 8px; border-radius:99px; background:#1b2136; border:1px solid var(--line); color:#c8cee0; }
+  .badge.tag { color:var(--muted); } .badge.on { background:var(--accent); border-color:var(--accent); color:#0a0c14; font-weight:650; }
+  .chip { font-size:12px; padding:3px 9px; border-radius:8px; border:1px solid var(--c); background:color-mix(in srgb, var(--c) 14%, transparent); }
+  .groups { display:flex; flex-direction:column; gap:6px; border-top:1px solid var(--line); padding-top:8px; } .grule { font-size:12px; } .grule > span { color:var(--muted); } .grule > div { display:flex; flex-wrap:wrap; gap:4px; margin-top:3px; }
+  .notes { margin:0; padding:0; list-style:none; font-size:12px; color:#f0c987; display:flex; flex-direction:column; gap:3px; }
+  .pack footer { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; }
+  .pack .lic { color:var(--muted); font-size:12px; } .pack .lic a { color:var(--accent); } .pack .lic details { margin-top:4px; } .pack .lic ul { margin:4px 0 0; padding-left:16px; }
+  .pack .use { flex:none; } .pack .use:not([disabled]) { background:#27406e; border-color:#3d5f9c; } .pack .use[disabled] { opacity:.5; cursor:not-allowed; }
+  .muted { color:var(--muted); }
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  main { position:relative; }
+  #chordPanel { position:absolute; top:16px; left:50%; transform:translateX(-50%); z-index:5; width:min(760px,94%); display:flex; flex-direction:column; align-items:center; gap:10px; pointer-events:none; }
+  #chordPanel[hidden] { display:none; }
+  #chordNow { display:flex; align-items:baseline; gap:12px; }
+  #cName { font-size:44px; font-weight:700; letter-spacing:.01em; line-height:1; }
+  #cRoman { font-size:20px; color:var(--accent); font-weight:600; } #cBar { font-size:12px; color:var(--muted); }
+  #chordBars { display:grid; grid-template-columns:repeat(5,1fr); gap:6px; width:100%; }
+  .cb { position:relative; overflow:hidden; border:1px solid var(--line); border-radius:10px; padding:8px 10px 10px; background:rgba(14,18,36,.72); backdrop-filter:blur(4px); opacity:.6; min-height:56px; }
+  .cb .n { font-weight:650; font-size:16px; } .cb .r { font-size:11px; color:var(--muted); } .cb .b { position:absolute; right:8px; top:6px; font-size:10px; color:var(--muted); }
+  .cb.same { border-left-color:transparent; border-top-left-radius:0; border-bottom-left-radius:0; margin-left:-6px; } .cb.same .n, .cb.same .r { opacity:.35; }
+  .cb.deck { border-style:dashed; margin-left:10px; opacity:.45; } .cb.empty { visibility:hidden; }
+  .cb.cur { opacity:1; border-color:var(--accent); background:rgba(40,70,130,.55); }
+  .cb.cur .r { color:#cfe0ff; }
+  .cb.now { box-shadow:0 0 0 2px var(--accent) inset; }
+  .cb .fill { position:absolute; left:0; bottom:0; height:3px; width:0; background:var(--accent); }
+
+  canvas { width:100%; height:100%; display:block; }
+  #gate { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px; background:rgba(10,12,20,.9); text-align:center; padding:24px; }
+  #gate[hidden] { display:none; }
+  #gate p { color:var(--muted); max-width:440px; margin:0; }
+  #startBtn { font-size:16px; padding:14px 28px; background:#27406e; border-color:#3d5f9c; }
+  #progress { color:var(--muted); min-height:1.4em; }
+  #alert { background:#3b1d1d; border:1px solid #6b2e2e; color:#ffcfc7; padding:8px 10px; border-radius:8px; }
+  .danger { background:#3a1b22; border-color:#6b2e3c; }
+  #menuBtn, #menuClose { padding:4px 10px; font-size:18px; line-height:1; }
+  #scrim { position:fixed; inset:0; z-index:950; background:rgba(6,8,14,.55); } #scrim[hidden] { display:none; }
+  #drawer { position:fixed; top:0; left:0; bottom:0; width:340px; max-width:92vw; z-index:960; background:var(--panel); border-right:1px solid var(--line); padding:18px; overflow:auto; display:flex; flex-direction:column; gap:20px; transform:translateX(-102%); transition:transform .22s ease; box-shadow:6px 0 30px rgba(0,0,0,.4); }
+  #drawer.open { transform:none; }
+  #drawer section { display:flex; flex-direction:column; gap:6px; } .dh { margin-bottom:2px; }
+  .pill { display:inline-flex; align-items:center; gap:6px; font-size:11px; padding:3px 9px; border-radius:99px; border:1px solid var(--line); background:#0d1020; white-space:nowrap; }
+  .pill i, #srvBig i { width:9px; height:9px; border-radius:50%; background:#6fd39b; box-shadow:0 0 8px #6fd39b; flex:none; display:inline-block; }
+  .pill.ok { color:#bfeed3; } .pill.restarting, .pill.down { color:#ffd2ca; border-color:#7a2f2f; background:#2a1416; }
+  .pill.restarting i, .pill.down i, #srvBig.restarting i, #srvBig.down i { background:#ef5a4a; box-shadow:0 0 10px #ef5a4a; }
+  .pill.restarting i, #srvBig.restarting i { animation:blink .5s infinite alternate; }
+  #srvBig { display:flex; align-items:center; gap:12px; padding:10px 12px; border-radius:10px; border:1px solid #2e6b4b; background:#10241b; }
+  #srvBig.restarting, #srvBig.down { border-color:#7a2f2f; background:#2a1416; } #srvBig b { font-size:15px; }
+  #srvBanner { position:fixed; top:0; left:0; right:0; z-index:990; text-align:center; padding:10px 14px; font-weight:650; background:#a8321f; color:#fff; letter-spacing:.02em; } #srvBanner[hidden] { display:none; }
+  #srvBanner.good { background:#1f7a4d; }
+  #toasts { position:fixed; left:50%; bottom:18px; transform:translateX(-50%); z-index:980; display:flex; flex-direction:column; gap:6px; align-items:center; pointer-events:none; width:min(560px,94vw); }
+  .toast { display:flex; align-items:center; gap:10px; padding:9px 14px; border-radius:10px; font-size:13px; border:1px solid #2e6b4b; background:#10241b; color:#d4f5e2; box-shadow:0 6px 24px rgba(0,0,0,.45); }
+  .toast i { width:9px; height:9px; border-radius:50%; background:#6fd39b; flex:none; box-shadow:0 0 8px #6fd39b; }
+  .toast.work { border-color:#7a6a2f; background:#26210f; color:#ffeaa8; } .toast.work i { background:#f0c24a; box-shadow:0 0 8px #f0c24a; animation:blink .5s infinite alternate; }
+  .toast.err { border-color:#7a2f2f; background:#2a1416; color:#ffd2ca; } .toast.err i { background:#ef5a4a; box-shadow:0 0 8px #ef5a4a; }
+  button.busy { border-color:#7a6a2f; background:#26210f; color:#ffeaa8; cursor:progress; } button.done { border-color:#2e6b4b; background:#10241b; color:#d4f5e2; }
+  select:disabled, button:disabled { opacity:.6; }
+  #dock { position:sticky; bottom:-18px; margin:0 -18px -18px; padding:12px 18px; background:var(--panel); border-top:1px solid var(--line); display:grid; grid-template-columns:1.4fr 1fr; gap:8px; z-index:3; box-shadow:0 -10px 18px rgba(0,0,0,.35); }
+  #dock #regen { background:#27406e; border-color:#3d5f9c; font-weight:600; }
+  @media (max-width: 800px) { body { grid-template-columns:1fr; grid-template-rows:auto 60vh; height:auto; } }
+#bpmRow{display:flex;align-items:center;gap:4px}#bpmRow input{flex:1;min-width:0}#bpmRow button{width:40px;padding:6px 0;font-size:20px;line-height:1}#bpmNow{font-size:26px;margin-left:6px;vertical-align:middle}#bpmTgt{margin-left:8px}
+</style>
+</head>
+<body>
+<div id="scrim" hidden></div>
+<nav id="drawer" aria-label="Menu" aria-hidden="true">
+  <div class="row"><h1>MENU</h1><button id="menuClose" aria-label="Close menu">✕</button></div>
+  <section><div class="label dh">Sample pack</div>
+    <button id="packBtn" title="Browse and switch sample packs"><span class="label">Sample pack</span><b id="packName">–</b><span class="go">Browse packs…</span></button>
+    <div id="packStatus"></div>
+  </section>
+  <section><div class="label dh">Daqian 大千 · join from a phone</div>
+    <div id="urls"></div>
+    <div id="qr" title="Scan with a phone camera" style="background:#fff;padding:8px;border-radius:8px;width:150px;margin-top:8px"></div>
+    <div class="label" id="qrhint" style="margin-top:4px;font-size:11px;opacity:.7">Scan to join. Phone must be on the same Wi-Fi.</div>
+  </section>
+  <section><div class="label dh">Fangzhang 方丈 · server</div>
+  <div id="srvBig" class="ok"><i></i><div><b id="srvState">Checking…</b><div id="srvDetail" class="muted"></div></div></div>
+  <div id="srv"><span id="srvInfo">…</span><button id="restartBtn" title="Stops and starts the server (needs npm start)">Restart server</button></div>
+  </section>
+</nav>
+<div id="toasts" aria-live="polite"></div>
+<div id="srvBanner" hidden role="alert"></div>
+<aside>
+  <div class="row"><h1>RESONANCE<small>Dantian 丹田 · audio engine, plays on this machine</small></h1><span id="srvPill" class="pill ok" title="Server status"><i></i><span>Server OK</span></span><button id="menuBtn" aria-label="Menu" title="Packs, join QR, server">☰</button></div>
+  <div id="alert" hidden></div>
+  <div id="updateBar" hidden><span>The app was updated on the server.</span><button id="reloadBtn">Reload page</button></div>
+
+  <div class="row"><span class="label">Position (bar.beat)</span><span><span id="conn" class="bad">connecting…</span> · <span id="clients">0</span> phones</span></div>
+  <div class="row"><span id="pos">–.–</span><span id="tempo" class="label"></span></div>
+
+  <div><span class="label">BPM now</span> <b id="bpmNow">70</b><span id="bpmTgt" class="label" hidden> → target <b id="bpmVal" style="color:var(--text)">70</b></span><span hidden><b id="bpmValHold"></b></span><div id="bpmRow"><button id="bpmDn" type="button" title="1 BPM slower (Shift: 5)">−</button><input id="bpm" type="range" min="40" max="160" step="1" value="70" title="Release to apply: the tempo glides to the new BPM in small steps"><button id="bpmUp" type="button" title="1 BPM faster (Shift: 5)">+</button></div></div>
+  <button id="applyBpm" hidden style="display:none" title="Re-renders the generated stems at the new BPM and swaps them in on the next bar">Apply BPM</button>
+  <div class="grid2">
+    <label><span class="label">Progression runs</span>
+      <select id="runs"><option value="0" selected>Endless</option><option value="1">1</option><option value="8">8</option><option value="16">16</option><option value="32">32</option><option value="64">64</option></select></label>
+    <div style="display:flex;flex-direction:column;justify-content:flex-end"><button id="restartRun" title="Start counting runs from now" style="padding:8px;font-size:13px">Restart run count</button></div>
+  </div>
+  <div id="runInfo" class="muted" style="font-size:12px"></div>
+  <div class="grid2">
+    <label><span class="label">Quantize</span>
+      <select id="quantize"><option value="beat">Beat</option><option value="half">Half bar</option><option value="bar">Bar</option></select></label>
+    <label><span class="label">Key</span><select id="key"></select></label>
+  </div>
+  <div class="grid2">
+    <label><span class="label">Fade in <span id="fadeInVal"></span></span><input id="fadeIn" type="range" min="0.5" max="16" step="0.5" value="4"></label>
+    <label><span class="label">Fade out <span id="fadeOutVal"></span></span><input id="fadeOut" type="range" min="0.5" max="16" step="0.5" value="4"></label>
+  </div>
+  <label><span class="label">Brightness (sensor-ready param)</span><input id="bright" type="range" min="0" max="1" step="0.01" value="0.85"></label>
+  <label><span class="label">Master volume</span><input id="vol" type="range" min="0" max="1.2" step="0.01" value="0.9"></label>
+  <div>
+    <div class="label" style="margin-bottom:6px">Stems (click to toggle · small square = volume / filter XY)</div>
+    <div id="stems"></div>
+  </div>
+
+  <button id="export" title="Download the generated stems as WAV loops">Export WAVs</button>
+  <div id="dock">
+    <button id="regen" title="New random seed: new melodies, bells, arp, bass and rhythm details. Swaps in on the next bar.">New variation</button>
+    <button id="stopAll" class="danger">Stop all</button>
+  </div>
+</aside>
+<main>
+  <canvas id="viz"></canvas>
+  <div id="chordPanel" hidden>
+    <div id="chordNow"><span id="cName">–</span><span id="cRoman"></span><span id="cBar"></span></div>
+    <div id="chordBars"></div>
+  </div>
+  <div id="gate">
+    <h1>RESONANCE</h1>
+    <p>This tab is Dantian 丹田, the audio engine. Route this computer's audio output to the PA, then start. Daqian 大千 (the audience's phones) join from the ☰ menu (QR code).</p>
+    <button id="startBtn">Start engine</button>
+    <div id="progress"></div>
+  </div>
+</main>
+<div id="packs" hidden>
+  <div class="sheet" role="dialog" aria-label="Sample packs">
+    <header>
+      <h2>Sample packs<small>Switching fades out everything that's playing, then loads the new pack.</small></h2>
+      <button id="packsClose">Close</button>
+    </header>
+    <div id="packList"></div>
+    <footer><span>To add a pack, drop a folder of loops into <code>packs/</code> (see packs/README.md).</span><button id="packsRescan">Rescan</button></footer>
+  </div>
+</div>
+<script src="xy.js"></script>
+<script src="synth.js"></script>
+<script src="vendor/qrcode.js"></script>
+<script src="engine.js"></script>
+</body>
+</html>

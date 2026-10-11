@@ -1,0 +1,16 @@
+{
+  "name": "Layers · Core, Melodic, Rhythmic, Nature",
+  "description": "Five groups, each with its own audience rules: Core synth (Drone, Pad, Atmos, Noise), Melodic (Arp, Bells, Shimmer, two melodies), Rhythmic (Pulse, Sub), Nature samples (Stream, Rain, Garden) and the Gong (a three-person vote that sounds only three times).",
+  "include": [
+    "core-synth",
+    "melodic-synth",
+    "rhythmic-synth",
+    "field-recordings-cc0"
+  ],
+  "tags": [
+    "combined",
+    "layers",
+    "groups"
+  ],
+  "order": 1
+}

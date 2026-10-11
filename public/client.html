@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#0a0c14">
+<title>RESONANCE · 大千</title>
+<style>
+  :root { --bg:#0a0c14; --text:#e6e9f2; --muted:#8a93ad; --line:#232a40; }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html, body { margin:0; background:var(--bg); color:var(--text); font:15px/1.4 system-ui,-apple-system,Segoe UI,sans-serif; height:100%; overflow:hidden; overscroll-behavior:none; }
+  body { padding: max(12px, env(safe-area-inset-top)) 12px max(10px, env(safe-area-inset-bottom)); display:flex; flex-direction:column; gap:10px; height:100dvh; }
+  header { display:flex; justify-content:space-between; align-items:baseline; }
+  h1 { font-size:13px; letter-spacing:.35em; margin:0; font-weight:600; }
+  h1 small { display:block; letter-spacing:.08em; font-size:11px; font-weight:400; color:var(--muted); margin-top:2px; }
+  #status { font-size:12px; color:var(--muted); }
+  #status.bad { color:#ef8a7a; }
+  #beats { display:flex; gap:8px; justify-content:center; }
+  #beats i { width:10px; height:10px; border-radius:50%; background:#262d45; transition: background .08s, transform .08s; }
+  #beats i.on { background:#dfe6ff; transform:scale(1.3); }
+  /* grid fills the screen (no page scroll) so dragging on a pad never fights with scrolling */
+  #grid { flex:1; min-height:0; display:flex; flex-direction:column; gap:12px; }
+  .grp { flex:1 1 0; min-height:0; display:flex; flex-direction:column; gap:6px; }
+  .gh { display:flex; justify-content:space-between; align-items:baseline; gap:10px; font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); white-space:nowrap; }
+  .gh span { text-transform:none; letter-spacing:0; overflow:hidden; text-overflow:ellipsis; opacity:.8; }
+  .gg { flex:1; min-height:0; display:grid; gap:10px; grid-auto-rows:1fr; }
+  .pad.locked, .pad.spent { opacity:.45; }
+  .pad[data-wait] .st { color:var(--c); }
+  #toast { position:fixed; left:50%; bottom:22px; transform:translateX(-50%); background:#1b2136; border:1px solid #3a4468; color:#e8ecff; padding:9px 14px; border-radius:12px; font-size:13px; z-index:50; opacity:0; pointer-events:none; transition:opacity .2s; max-width:90%; text-align:center; }
+  #toast.on { opacity:1; }
+  .pad { position:relative; overflow:hidden; border-radius:16px; border:2px solid color-mix(in srgb, var(--c) 45%, transparent);
+         background: color-mix(in srgb, var(--c) 8%, #0e1120); color:var(--text); padding:10px 12px; text-align:left;
+         display:flex; flex-direction:column; justify-content:flex-end; cursor:pointer; user-select:none; -webkit-user-select:none;
+         touch-action:none; transition: background .25s, box-shadow .25s, transform .08s; min-height:0; }
+  .pad.pressed { transform:scale(.97); }
+  .pad .name { position:relative; z-index:1; font-size:18px; font-weight:650; line-height:1.15; }
+  .pad .role { position:relative; z-index:1; font-size:11px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .pad .st { position:absolute; z-index:1; top:8px; right:10px; font-size:10px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); font-variant-numeric:tabular-nums; }
+  .pad[data-state=playing] { background: color-mix(in srgb, var(--c) 50%, #0e1120); box-shadow: 0 0 24px color-mix(in srgb, var(--c) 50%, transparent); border-color:var(--c); }
+  .pad[data-state=playing] .role, .pad[data-state=playing] .st { color: rgba(255,255,255,.85); }
+  .pad[data-state=starting], .pad[data-state=stopping] { animation: pend .43s infinite alternate; border-color:var(--c); }
+  @keyframes pend { from { background: color-mix(in srgb, var(--c) 35%, #0e1120); } to { background: color-mix(in srgb, var(--c) 10%, #0e1120); } }
+  /* in-button XY: crosshair + handle; X = filter cutoff, Y = volume */
+  .pad .xh, .pad .xv { position:absolute; background:rgba(255,255,255,.18); pointer-events:none; }
+  .pad .xh { left:0; right:0; height:1px; } .pad .xv { top:0; bottom:0; width:1px; }
+  .pad .xd { position:absolute; width:14px; height:14px; margin:-7px 0 0 -7px; border-radius:50%; background:#fff; opacity:.75; box-shadow:0 0 10px var(--c); pointer-events:none; transition: width .12s, height .12s, margin .12s; }
+  .pad.dragging { border-color:#fff; }
+  .pad.dragging .xh, .pad.dragging .xv { background:rgba(255,255,255,.5); }
+  .pad.dragging .xd { width:26px; height:26px; margin:-13px 0 0 -13px; opacity:1; }
+  .pad.dragging .st { color:#fff; }
+  footer { text-align:center; color:var(--muted); font-size:11px; line-height:1.35; }
+</style>
+</head>
+<body>
+  <header><h1>RESONANCE<small id="packname"></small></h1><span id="status" class="bad">connecting…</span></header>
+  <div id="beats"></div>
+  <div id="grid"></div>
+  <div id="toast"></div>
+  <footer><b>Tap</b> a layer to bring it in or out (joins on the next beat) · <b>Drag</b> on it: ↔ filter, ↕ volume · <b>Hold</b> for the big XY pad</footer>
+<script src="xy.js"></script>
+<script>
+(() => {
+  const $ = (s) => document.querySelector(s);
+  const XY = ResonanceXY;
+  let cfg = null, state = { active: [], playing: [], engine: false, clients: 0 }, ws;
+  const xyState = {};           // id -> {x, y}
+  const draggingId = new Set(); // stems this phone is currently dragging (ignore echoes for them)
+  const TAP_SLOP = 8, HOLD_MS = 550, INSET = 12;
+
+  const sendMsg = (m) => ws && ws.readyState === 1 && ws.send(JSON.stringify(m));
+  const sheet = XY.createSheet({
+    send: sendMsg,
+    onToggle: (id) => sendMsg({ type: 'toggle', stem: id }),
+    onLocal: (id, x, y) => { xyState[id] = { x, y }; drawXY(id); },
+  });
+
+  // rAF-throttled XY sender (≤ 1 message per stem per frame)
+  const outbox = new Map(); let raf = 0;
+  function queueXY(id) {
+    const p = xyState[id];
+    outbox.set(id, { type: 'xy', stem: id, x: +p.x.toFixed(4), y: +p.y.toFixed(4) });
+    if (!raf) raf = requestAnimationFrame(() => { raf = 0; for (const m of outbox.values()) sendMsg(m); outbox.clear(); });
+  }
+
+  function onXY(id, p) {
+    if (draggingId.has(id)) return;
+    xyState[id] = { x: p.x, y: p.y };
+    drawXY(id);
+    sheet.update(id, xyState[id]);
+  }
+
+  function drawXY(id) {
+    const b = document.querySelector(`.pad[data-id="${id}"]`), p = xyState[id] || XY.XY_DEFAULT;
+    if (!b) return;
+    const px = `calc(${INSET}px + (100% - ${2 * INSET}px) * ${p.x})`, py = `calc(${INSET}px + (100% - ${2 * INSET}px) * ${1 - p.y})`;
+    b.querySelector('.xd').style.left = px; b.querySelector('.xd').style.top = py;
+    b.querySelector('.xv').style.left = px; b.querySelector('.xh').style.top = py;
+    if (b.classList.contains('dragging')) b.querySelector('.st').textContent = `${XY.fmtDb(XY.volume(p.y))} · ${XY.fmtHz(XY.cutoffHz(p.x))}`;
+  }
+
+  function connect() {
+    ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws?role=client`);
+    ws.onopen = () => status();
+    ws.onclose = () => { status(); setTimeout(connect, 1000); };
+    ws.onmessage = (e) => {
+      const m = JSON.parse(e.data);
+      if (m.type === 'config') {
+        if (cfg && cfg.pack && m.pack && cfg.pack.id !== m.pack.id) { // pack switched: forget the old pads
+          for (const k of Object.keys(xyState)) delete xyState[k];
+          draggingId.clear(); outbox.clear(); sheet.close();
+        }
+        if (cfg && m.build && cfg.build && m.build !== cfg.build) { location.reload(); return; } // the app was updated: pick up the new page
+        cfg = m; $('#packname').textContent = m.pack ? m.pack.name : ''; build();
+      }
+      else if (m.type === 'denied') { toast(m.reason); }
+      else if (m.type === 'state') {
+        state = m; render(); status();
+        if (m.xy) for (const [id, p] of Object.entries(m.xy)) onXY(Number(id), p);
+      }
+      else if (m.type === 'xy') onXY(m.stem, m);
+      else if (m.type === 'tick') beat(m);
+    };
+  }
+
+  function status() {
+    const el = $('#status');
+    if (!ws || ws.readyState !== 1) { el.textContent = 'reconnecting…'; el.className = 'bad'; return; }
+    if (!state.engine) { el.textContent = 'waiting for engine'; el.className = 'bad'; return; }
+    el.textContent = `live · ${state.clients} connected`; el.className = '';
+  }
+
+  // Pick the column count whose cells come closest to a comfortable pad shape.
+  function layout() {
+    if (!cfg) return;
+    document.querySelectorAll('.gg').forEach((g) => {
+      const n = g.children.length, W = g.clientWidth, H = g.clientHeight, gap = 10;
+      let best = Math.min(2, n), bestScore = Infinity;
+      for (let c = 1; c <= Math.min(n, 8); c++) {
+        const r = Math.ceil(n / c), cw = (W - gap * (c - 1)) / c, ch = (H - gap * (r - 1)) / r;
+        if (cw < 90 || ch < 56) continue;
+        const score = Math.abs(Math.log((cw / ch) / 1.1)) + (r * c - n) * 0.05;
+        if (score < bestScore) { bestScore = score; best = c; }
+      }
+      g.style.gridTemplateColumns = `repeat(${best}, 1fr)`;
+    });
+  }
+  addEventListener('resize', layout);
+
+  // Tap = toggle, drag = XY (relative, so touching never makes the value jump), hold = big XY sheet.
+  function wirePad(b, id, def) {
+    let g = null; // gesture
+    b.addEventListener('pointerdown', (e) => {
+      if (g) return;
+      b.setPointerCapture(e.pointerId);
+      b.classList.add('pressed');
+      const r = b.getBoundingClientRect();
+      g = { pid: e.pointerId, sx: e.clientX, sy: e.clientY, w: r.width - 2 * INSET, h: r.height - 2 * INSET, from: { ...(xyState[id] || XY.XY_DEFAULT) }, mode: 'pending' };
+      g.hold = setTimeout(() => {
+        if (g && g.mode === 'pending') {
+          g.mode = 'hold'; b.classList.remove('pressed');
+          if (navigator.vibrate) navigator.vibrate(25);
+          sheet.open(def, xyState[id] || XY.XY_DEFAULT, new Set(state.active).has(id));
+        }
+      }, HOLD_MS);
+    });
+    b.addEventListener('pointermove', (e) => {
+      if (!g || e.pointerId !== g.pid) return;
+      const dx = e.clientX - g.sx, dy = e.clientY - g.sy;
+      if (g.mode === 'pending' && Math.hypot(dx, dy) > TAP_SLOP) {
+        g.mode = 'drag'; clearTimeout(g.hold);
+        draggingId.add(id); b.classList.add('dragging'); b.classList.remove('pressed');
+      }
+      if (g.mode !== 'drag') return;
+      const x = Math.max(0, Math.min(1, g.from.x + dx / g.w));
+      const y = Math.max(0, Math.min(1, g.from.y - dy / g.h));
+      xyState[id] = { x, y };
+      drawXY(id); queueXY(id); sheet.update(id, xyState[id]);
+    });
+    const end = (e, cancelled) => {
+      if (!g || e.pointerId !== g.pid) return;
+      clearTimeout(g.hold);
+      if (g.mode === 'pending' && !cancelled) {
+        sendMsg({ type: 'toggle', stem: id });
+        if (navigator.vibrate) navigator.vibrate(15);
+      }
+      if (g.mode === 'drag') { queueXY(id); draggingId.delete(id); b.classList.remove('dragging'); render(); }
+      b.classList.remove('pressed');
+      g = null;
+    };
+    b.addEventListener('pointerup', (e) => end(e, false));
+    b.addEventListener('pointercancel', (e) => end(e, true));
+    b.addEventListener('contextmenu', (e) => e.preventDefault());
+    b.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); sendMsg({ type: 'toggle', stem: id }); } });
+  }
+
+  function build() {
+    const groups = cfg.groups && cfg.groups.length ? cfg.groups : [{ id: null, name: '', badges: [], rules: {} }];
+    const padHtml = (s) => `
+      <div class="pad" role="button" tabindex="0" data-id="${s.id}" style="--c:${s.color || '#888'}" aria-label="${s.name}: tap to toggle, drag for filter and volume">
+        <span class="xh"></span><span class="xv"></span><span class="xd"></span>
+        <span class="st"></span><span class="name">${s.name}</span><span class="role">${s.role || ''}</span>
+      </div>`;
+    $('#grid').innerHTML = groups.map((g) => {
+      const stems = cfg.stems.filter((s) => (s.group || null) === g.id);
+      const head = g.id ? `<div class="gh" title="${(g.badges || []).join(' · ')}"><b>${g.name}</b><span>${(g.badges || []).join(' · ')}</span></div>` : '';
+      return `<section class="grp" data-g="${g.id || ''}" style="flex-grow:${Math.max(1, Math.ceil(stems.length / 2))}">${head}<div class="gg">${stems.map(padHtml).join('')}</div></section>`;
+    }).join('');
+    for (const g of groups) if (g.id && g.rules && g.rules.toggle === false)
+      cfg.stems.filter((s) => s.group === g.id).forEach((s) => document.querySelector(`.pad[data-id="${s.id}"]`).classList.add('locked'));
+    $('#grid').querySelectorAll('.pad').forEach((b) => {
+      const id = Number(b.dataset.id);
+      wirePad(b, id, cfg.stems.find((s) => s.id === id));
+      drawXY(id);
+    });
+    $('#beats').innerHTML = '<i></i>'.repeat(cfg.beatsPerBar);
+    layout();
+    render();
+  }
+
+  function render() {
+    if (!cfg) return;
+    const a = new Set(state.active), p = new Set(state.playing);
+    document.querySelectorAll('.pad').forEach((b) => {
+      const id = Number(b.dataset.id);
+      const s = a.has(id) ? (p.has(id) || !state.engine ? 'playing' : 'starting') : (p.has(id) ? 'stopping' : 'off');
+      b.dataset.state = s;
+      const pend = state.pending && state.pending[id];
+      if (pend && s === 'off') b.dataset.wait = '1'; else delete b.dataset.wait;
+      const pl = state.plays && state.plays[id], spent = !!pl && pl.used >= pl.max;
+      b.classList.toggle('spent', spent);
+      if (!b.classList.contains('dragging')) b.querySelector('.st').textContent = pend && s === 'off' ? `${pend.have}/${pend.need} joined` : s === 'off' ? (pl ? (spent ? 'spent' : `${pl.max - pl.used} left`) : '') : s;
+    });
+    if (sheet.stemId != null) sheet.setOn(a.has(sheet.stemId));
+  }
+
+  let toastTimer = 0;
+  function toast(t) { const el = $('#toast'); el.textContent = t; el.classList.add('on'); clearTimeout(toastTimer); toastTimer = setTimeout(() => el.classList.remove('on'), 2200); }
+
+  function beat(m) {
+    document.querySelectorAll('#beats i').forEach((el, i) => el.classList.toggle('on', i === m.beat - 1));
+  }
+
+  connect();
+})();
+</script>
+</body>
+</html>

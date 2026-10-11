@@ -1,0 +1,6 @@
+{
+  "name": "Full set",
+  "description": "All eight generated stems plus the four field recordings: 12 pads on one grid. This is the default pack.",
+  "include": ["ambient-generated", "field-recordings-cc0"],
+  "order": 10
+}

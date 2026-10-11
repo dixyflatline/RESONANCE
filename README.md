@@ -1,0 +1,299 @@
+# RESONANCE
+
+**A live-performance instrument where the audience plays the music.** Phones in the room become controllers; one machine plays the sound through the PA.
+
+RESONANCE is the proof of concept (PoC) for a cybernetic, biofeedback-ready live performance. People in the audience tap buttons on their phones to bring ambient layers in and out (drone, pad, arpeggio, bells, a bass line, melodies, field recordings). Every layer is locked to one shared clock and one shared harmony plan, so whatever the crowd does, it stays in time and in tune. The same input path is meant to take biosensor data later (heart rate, breath, movement), so the room's body can shape the music as well as its fingers.
+
+![status](https://img.shields.io/badge/status-proof%20of%20concept-orange)
+
+## What it does
+
+- **The audience plays.** Each phone shows one button per layer. Tap to switch a layer on or off, drag on a button to change its filter and volume.
+- **It always sounds musical.** Layers enter on the beat, phase-aligned to a master clock, with long fades. All generated layers follow one chord progression (Dm9, B♭maj7♯11, Fmaj9, C6/9) and a priority-based harmony plan, so layers do not clash.
+- **The performer stays in control.** The engine page has the tempo, key, fades, progression runs, a master volume and a Stop all that brings the instruments out in order. Audience rules (cooldowns, limits, a three-person vote for the gong) stop the room from wrecking the piece.
+- **No outside services.** No cloud, no LLM, no accounts. The music is generated in the browser with the Web Audio API, plus a few CC0 field recordings.
+
+## The three parts
+
+| Code name | What it is | URL |
+|---|---|---|
+| **Fangzhang 方丈** | The server (Node + WebSocket). Keeps the state and the rules, plays nothing. | runs in the terminal |
+| **Dantian 丹田** | The engine page. Generates and plays all the audio. Open it on the machine wired to the PA. | `/engine` |
+| **Daqian 大千** | The audience page on each phone. | `/` |
+
+## Quick start
+
+You need [Node.js](https://nodejs.org) 18 or newer, and a computer plus phones on the same Wi-Fi.
+
+```bash
+git clone https://github.com/dixyflatline/RESONANCE.git
+cd RESONANCE
+npm install            # one dependency: ws
+npm run fetch-stems    # optional: downloads the 4 CC0 field recordings (see "Sample pack" below)
+npm start              # server on http://localhost:8080
+```
+
+## How to use it
+
+**The performer (on the machine connected to the PA)**
+
+1. Open **http://localhost:8080/engine** and send this computer's audio output to the PA.
+2. Click **Start engine**. It renders the stems, then everything starts silent.
+3. Open the **☰ menu** to show the QR code and join link for the audience.
+4. Shape the performance from the sidebar: BPM (the tempo glides to the new value), progression runs (Endless, or 1 to 64 runs, then an automatic fade-out), quantize, key, fades, brightness and master volume. Toggle stems yourself by clicking them; the engine page is not limited by audience rules.
+5. **New variation** re-seeds the melodies, bells, arp, bass and rhythm details. **Stop all** fades the layers out in order, colour first and drone last.
+
+**The audience (on their phones)**
+
+1. Scan the QR code, or open the LAN address shown on the engine page (use `http://`, not `https://`).
+2. Tap a button to bring a layer in or out. It lands on the next beat.
+3. Drag on a button to change that layer's filter (left/right) and volume (up/down).
+4. Some layers are shared on purpose: nature sounds need two people at once, and the **Gong** is the climax, which needs three people within 20 seconds and can strike only three times per performance.
+
+Full details are below: rules, harmony, joining from an iPhone, and the inputs for biosensors.
+
+## Sample pack
+
+RESONANCE needs no samples to run. The default packs generate their stems procedurally. For the natural, organic layer, the **Field recordings · CC0** pack is used: four public-domain recordings, cut into seamless bar-aligned loops at 70 BPM.
+
+| Layer | Recording | Author | Source |
+|---|---|---|---|
+| Stream | "Stream / river water up close" | jackthemurray (via Freesound) | [Wikimedia Commons](https://commons.wikimedia.org/wiki/File:433589_jackthemurray_stream-river-water-up-close.wav) |
+| Rain | "Light Rain, Distant Thunder, July 5th 2016" | kvgarlic (via Freesound) | [Wikimedia Commons](https://commons.wikimedia.org/wiki/File:Light_Rain_Distant_Thunder_July_5th_2016.wav) |
+| Garden | "Garden at Pioneer Works" (birds, wind) | Ogbabydiesal | [Wikimedia Commons](https://commons.wikimedia.org/wiki/File:Garden_at_Pioneer_Works.wav) |
+| Gong | "Chinese gong, finish of session" | the_very_Real_Horst (via Freesound) | [Wikimedia Commons](https://commons.wikimedia.org/wiki/File:240382_the-very-real-horst_chinese-gong-finish-session-2014-06-10-29-143.wav) |
+
+**Why this pack:** the original spec named a commercial sample library (Selekt Audio), but it now needs a paid trial with a card on file. These four recordings are licensed **CC0 1.0** (public-domain dedication), so they are free to use in a public performance with no attribution required. They also have no musical key, so they sit under any chord. Credit is given here anyway.
+
+**How the pack is built:** the WAV loops are not stored in this repository. `npm run fetch-stems` downloads the originals from Wikimedia Commons and cuts them into loops in `packs/field-recordings-cc0/` (it also writes a `CREDITS.md` there). Until you run it, the pack shows as unavailable and the generated packs work as normal. Check each file's page above for the licence before reuse; the licence is the author's choice and lives on the Commons page.
+
+To use your own samples, drop WAV loops into a folder under `packs/`. See [packs/README.md](packs/README.md).
+
+## License
+
+No open-source licence has been chosen for the code yet, so all rights are reserved by the author. The field recordings are CC0 (see above).
+
+## Names
+
+The parts of RESONANCE have code names from Chan (Zen) monastery life:
+
+- **Fangzhang 方丈** (the abbot): the server. It keeps the clock, the rules and the state, and plays nothing itself.
+- **Dantian 丹田** (the centre below the navel, where breath gathers): the engine page. It plays the sound to the PA.
+- **Daqian 大千** (the great thousand worlds, everyone and everything gathered): the audience's phone pages.
+
+The names are used in the page headings, the terminal output and these docs. The code itself still calls them server, engine and client, and the URLs are unchanged (`/` for Daqian, `/engine` for Dantian).
+
+## Run it
+
+```bash
+cd resonance-poc
+npm install        # installs the one dependency: ws
+npm start          # or: PORT=9000 npm start. Restarts itself when the server code changes.
+```
+
+1. On the performance machine (audio → PA), open **http://localhost:8080/engine** and click **Start engine**.
+2. Audience phones on the same Wi-Fi open the LAN URL printed in the terminal (it's also shown on the engine page), e.g. `http://192.168.1.23:8080/`.
+3. Tap to layer stems. A stem comes in on the next beat at the current position on the master timeline.
+
+**Auto-restart:** `npm start` runs the server under a small supervisor (`tools/run.js`). It restarts the server whenever `server.js` or `lib/` change, and the engine sidebar has a **Restart server** button (shows uptime and phones connected). When the code has changed, phones reload themselves and the engine page shows a **Reload page** bar (it doesn't reload by itself, so your audio isn't cut). Use `npm run start:plain` to skip the supervisor.
+
+> On macOS, the first run may ask whether Node can accept incoming connections. Allow it, or phones won't be able to connect.
+
+## Deploying online
+
+See [DEPLOY.md](DEPLOY.md) for Railway (CLI) or Render (free, via GitHub). Vercel can't host the WebSocket server.
+
+## How it maps to the spec
+
+| Spec item | Implementation |
+|---|---|
+| WebSocket transport | `ws` on `/ws`; roles: `client`, `engine`, `sensor` |
+| Messages | `{type:"toggle", stem}` → server; `{type:"state", active, playing, …}` → everyone |
+| Audio on server machine only | `engine.html` tab (Web Audio API). Clients only send messages |
+| Master clock | `AudioContext.currentTime` only; timeline origin `t0`. Timers are used for UI only |
+| Quantised triggers | next beat by default; half-bar / bar selectable on the engine page |
+| Phase-aligned entry | `offset = (boundary − t0) mod loopLength` (see note below) |
+| Fades | every stem enters from silence with an S-curve fade-in and leaves with a fade-out (`fadeIn` / `fadeOut` in config.json, default 4 s; adjustable live on the engine page; per-stem override with `"fadeIn"` / `"fadeOut"` on a stem) |
+| New client gets state | yes, sent on connect; all clients get every change |
+| Sensor-ready input | every input goes through `handleInput()` in `server.js` |
+
+**Note on phase alignment:** the spec computes `posInBar`. For multi-bar loops the engine uses position **mod loop length**, which keeps bar 5 of one stem aligned with bar 5 of every other stem. With 1-bar loops the two formulas give the same result.
+
+**Button states:** *starting* / *stopping* (pulsing) means the change is queued for the next beat. *playing* means the engine reports the stem is sounding.
+
+## Per-sample XY controller (volume + filter)
+
+Every sample has an XY controller. On phones it's built into each button:
+
+- **Tap** a button to switch the sample on or off (on the next beat).
+- **Drag** on a button to change filter (↔) and volume (↕). The crosshair and dot show the current position, and the label shows dB and Hz while you drag. The drag is relative, so touching the button never makes the value jump.
+- **Hold** a button (about ½ s) to open a big XY pad for finer control.
+
+On the engine page, the small square next to each sample opens the same big pad.
+
+- **X (left → right):** low-pass filter cutoff, 60 Hz → 20 kHz on a log scale. Fully right means the filter is open.
+- **Y (bottom → top):** volume. The default (0.8) is the sample's `gain` from config.json, the top is +3.9 dB and the bottom is silent.
+- **Double-tap** the pad to reset it (filter open, normal volume).
+
+Positions are shared. When someone moves a pad, everyone's view of it updates, and anyone who connects later sees the current positions. The pad also works while a sample is off, so it enters with those settings. Sensors or scripts can send the same message: `{"type":"xy","stem":3,"x":0.4,"y":0.7}` over the WebSocket or `POST /api/input`.
+
+## Sample packs
+
+Samples live in **packs**: one folder per pack under `packs/`. Click **Browse packs…** in the engine sidebar to see every pack (tempo, key, stems, size, license, credits, warnings) and switch with **Use this pack**. Switching fades out what's playing, loads the new pack on the engine, and updates every phone. `npm run packs` prints the same list in a terminal. The default at startup is `"pack"` in `config.json`.
+
+| Pack | What it is |
+|---|---|
+| `ambient-generated` | The 8 procedural stems (no files needed) |
+| `field-recordings-cc0` | 4 CC0 recordings: Stream, Rain, Garden, Gong (run `npm run fetch-stems`) |
+| `melody-progression` | Generated melody over **1–4–3–6–2–5–1** in the same minor key as the generated stems (i–iv–III–VI–ii°–v–i; 8-bar loop, so it lines up with the ambient stems): Chords, Bass, Arp, Melody. `melody-progression-major` is the major version (set `"mode"` in pack.json). *New variation* re-rolls the melody; *Key* transposes it |
+| `layers` (default) | Five groups, each with its own audience rules: **Core synth** (Drone, Pad, Atmos, Noise), **Melodic** (Arp, Bells, Shimmer, Melody A lyrical, Melody B flowing), **Rhythmic** (Pulse, Sub), **Nature samples** (Stream, Rain, Garden) and a **Gong** accent |
+| `core-synth`, `melodic-synth`, `rhythmic-synth` | The synth groups on their own (`layers` is built from them plus the field recordings) |
+| `melody-ambient` | Four generated melodies to choose from (lyrical, flowing, leaping, bright) + an arpeggio, all **following the ambient stems' chords** (i–VI–III–VII, 8 bars) |
+| `ambient-melody` | The 8 ambient stems plus those melody stems: everything layers freely |
+| `full-set` | Both of the above combined |
+
+**Add your own:** drop a folder of WAV loops into `packs/` (tempo is read from names like `pad_70bpm.wav`, loop length from the audio), or add a `pack.json` for names, roles, colours and levels. The pack list flags loops that are too short or not a whole number of bars. Full details: [packs/README.md](packs/README.md).
+
+### CC0 field recordings
+
+```bash
+npm run fetch-stems
+```
+
+Downloads 4 CC0 recordings from Wikimedia Commons and cuts them into seamless 70 BPM loops in `packs/field-recordings-cc0/`, with a `CREDITS.md`. Until you run it, that pack has no playable stems and is shown as unavailable.
+
+| Pad | Source (CC0) | Loop |
+|---|---|---|
+| Stream | "Stream / river water up close", jackthemurray | 16 bars |
+| Rain | "Light Rain, Distant Thunder, July 5th 2016", kvgarlic | 16 bars |
+| Garden | "Garden at Pioneer Works" (birds, wind), Ogbabydiesal | 8 bars |
+| Gong | "Chinese gong, finish of session", the_very_Real_Horst | 8 bars |
+
+> Selekt Audio (named in the spec) now requires a paid trial with a card on file, so the free path uses Wikimedia Commons.
+
+**Export WAVs** on the engine page downloads the generated stems as loop files.
+
+## Generated stems
+
+All stems follow one progression, i – VI – III – VII (Dm9 · B♭maj7♯11 · Fmaj9 · C6/9), with 2 bars per chord:
+
+1. **Drone**: root + fifth, detuned saws, slow filter sweep
+2. **Pad**: chord pad
+3. **Sub**: sine bass limited to D and A (the notes the Drone already holds), picked from the chord's tones; changes note per bar
+4. **Arp**: plucked 8th-note arpeggio with dotted-8th delay
+5. **Tide**: filtered-noise "waves" + air
+6. **Pulse**: slow heartbeat (lub-dub on beats 1 & 3) + soft shaker, a nod to the biofeedback concept
+7. **Bells**: sparse FM bell melody
+8. **Shimmer**: high glassy pad
+
+Each loop is rendered in circular time: the reverb, delay and note tails past the loop end are folded back onto the start, so the loop point doesn't click or drop out. **New variation** re-rolls the random seed, and the **Key** menu changes the key. Both swap the new stems in on the next bar.
+
+**Staying clear of the Drone:** see *Harmony rules* below. The Pulse heartbeat drops onto the tonic of the key (D2 in D) and follows the Key menu.
+
+## Groups and audience rules
+
+Packs can sort stems into groups with rules for remote participants. The `layers` pack has five:
+
+- **Core synth** (Drone, Pad, Atmos, Noise): the bed of the piece. At least one layer always stays on, 3 s cooldown per layer, a gentle XY range (the filter can't be closed all the way, volume can't go to zero), and slow 8 s fades. *Atmos* is a blend layer: two timbres (soft triangle/sine and a brighter saw) play the same chord tones while a slow LFO crossfades between them.
+- **Melodic** (Arp, Bells, Shimmer, Melody A lyrical, Melody B flowing): up to 3 at once (the oldest is replaced), 4 s cooldown, XY range limited, 3 s in / 5 s out. The other two melody variations (C, D) are in the *Ambient + melody* pack.
+- **Rhythmic** (Pulse, Sub): up to 2 at once, 6 s cooldown, quick 1.5 s entrances so they land with the beat.
+- **Nature samples** (Stream, Rain, Garden): engagement-driven. It takes **two people tapping within 10 s** to bring one in (phones show "1/2 joined"), at most two play at once (the oldest is replaced), and each one fades away after 60 s unless brought back.
+- **Gong, the climax** (Gong): the audience's shared decision that the moment has come (see *The Gong* below). It takes **three people tapping within 20 s**, each vote is **one strike**, and it sounds **only three times** in a performance.
+
+### The Gong: the climax
+
+**Intent.** Everything else in RESONANCE is something the audience adds to, shapes or lets fade. The gong is different: it is the one moment the audience decides *together*. It is a deliberate climax, sounded when the audience feels the current setting or performance has reached its natural height (they are satisfied), or has run its course (they are tired of it). It marks a turning point, so it has to be rare, shared and unmistakable. That is why it is built the way it is:
+
+- **A three-person vote.** One person can't sound it. Three different phones must tap within 20 seconds; phones show "1/3 joined" while the vote builds, and the same phone tapping twice counts once. If the third tap doesn't come in time, the vote lapses.
+- **One strike per vote.** The vote produces a single strike of the gong, played once from its start (not looped), landing on the next bar line so it sits in the music. Its attack is instant and its tail rings for four bars. Nobody can cut it short or shape it: the XY pad is locked and further taps are refused while it rings.
+- **Only three times.** The gong can sound three times in one performance, no more. Phones show how many are left ("3 left", "2 left", "1 left") and then "spent"; a fourth vote is refused with "Gong has sounded 3 times. That's all for this performance". The scarcity is what gives each strike its weight, and the third is the last word.
+- **A new performance brings it back.** The three strikes reset when you click **Start engine**, **Restart run count**, or switch to a different pack (or restart the server). The engine operator can still sound the gong from the engine page at any time; that doesn't use up the audience's strikes.
+
+What the performer does with it is up to them: let the first strike mark a peak, treat it as a signal to change the setting (new variation, new BPM, strip back to the Drone), and hold the third in reserve as a closing gesture.
+
+The numbers (people, window, strikes, cooldown) live in the `climax` preset in `lib/rules.js` and can be overridden per pack in `rules` (see packs/README.md). The gong sample file holds one strike (bars 1 to 4) repeated in bars 5 to 8; the stem's `"playBars": 4` plays just one strike.
+
+Rules apply to audience phones only; the engine page, sensors and `POST /api/input` bypass them. When a phone is refused, it sees a short message ("Wait 2s", "Core synth: at least 1 must stay on"). The rules are plain data in each pack's `pack.json` (see packs/README.md), so changing them needs no code.
+
+## Joining from an iPhone or iPad (same Wi-Fi)
+
+1. Start the server on the laptop (`npm start`) and open the engine page there.
+2. The engine page's left column shows the audience URL (for example `http://192.168.1.23:8080/`) and a QR code. Point the phone or iPad camera at the QR code and tap the link. The QR code library is bundled, so it works without internet.
+3. The phone page is the audience controller; tapping a stem asks the engine to trigger it, subject to the group rules.
+
+If the laptop has several network adapters, the Wi-Fi address is listed first. Click another URL in the list to switch the QR code to it.
+
+If the phone can't connect:
+- Both devices must be on the same network. Guest Wi-Fi and some venue networks block devices from seeing each other ("client isolation"); use your own router or a phone hotspot with the laptop on it.
+- macOS may ask "Allow incoming connections for node?" the first time. Choose Allow (System Settings, Network, Firewall).
+- Use the `http://` address, not `https://`.
+- A VPN on the laptop can hide the Wi-Fi address; turn it off while performing.
+
+## BPM, runs and play time
+
+In the engine sidebar: The **BPM** slider (40 to 160) shows the new value and play time while you drag; when you let go, the generated stems are re-rendered at that tempo and swapped in together on the next bar. Every control reports its progress in a message at the bottom of the screen (rendering, waiting for the bar, done, or an error). **Progression runs** sets how many times the 8-bar chord progression plays before everything fades out on its own (choices: 1, 8, 16, 32, 64 or Endless). The line underneath estimates the play time: bars per run, time per run, total, and while playing, the current run and time left.
+
+The run counter starts when the first stem starts. **Restart run count** begins counting again from now. Recorded sample loops (stream, rain and so on) keep their own length and do not change with BPM; picking a different pack goes back to that pack's tempo.
+
+## Harmony rules (priority list)
+
+The generated stems share one note plan, built from the seed, so they don't clash. Higher-priority voices decide first and lower ones fit around them:
+
+| Priority | Voice | What it does |
+|---|---|---|
+| 1 | Drone | Holds D2, A2 and D3 (tonic and fifth); never changes |
+| 2 | Pulse | Thump always lands on the tonic (D2 in D) |
+| 3 | Sub | Long blooming notes (D or A) that need not start on beat 1, with octave leaps and a gentle half-step scoop, through heavy reverb and delay |
+| 4 | Pad | Chord tones; any that would rub against the bass are lifted an octave or dropped |
+| 5 | Atmos | Chord tones above the pad |
+| 6 | Arp | Single notes that fit under the pad and Atmos |
+| 7 | Melody, Bells, Shimmer | Top line; avoids seconds against everything underneath |
+
+The rules: two sounding notes a whole tone or closer apart clash; below G3 only unison, octave and fifth are allowed (thirds and fourths are muddy down there); near the bass, a note a semitone, whole tone or tritone from D or A clashes. A note that clashes is lifted by octaves until it fits, or dropped. The Sub is limited to D and A because, in the bass register, any other note would beat against the Drone.
+
+### The Sub line
+
+The Sub is long, spare and blooming. Its notes are the D and A the Drone holds (D2, A2, D3 and A3 in key D), so they are always in tune with it. It need not start on beat 1. Each chord (two bars) picks one of four shapes from the seed:
+
+- **Bloom:** one note enters on beat 1, 2, 3 or 4 and rings to the end of the chord.
+- **Leap:** a note, then a jump up an octave four beats later (now and then a twelfth, D2 to A3).
+- **Slide:** a note, then the other low tone (D2 or A2) arrives with a gentle half-step scoop: it starts a semitone below (or above) and settles into the note over a half note (2 beats), with the volume dipping slightly. The move between the two notes is a soft crossfade, not a long glide.
+- **Late:** the first bar is silent; one note enters late in the second bar and carries over into the next chord.
+
+Every note swells in slowly (about one to 1.7 seconds) and dissolves out over one to two and a half seconds, and the Sub is sent through a heavy reverb and a ping-pong delay (1.5 and 2 beats, tempo-synced) so it blooms and dissolves into the mix. The dry signal stays a pure low end; the wet signal is a little brighter so you can hear the bloom. The scoop is the only moment the Sub sounds a pitch outside D and A, and only by a semitone. `npm run clash` checks that every Sub note is on the ladder, notes are at least two beats long, and no chord has more than two.
+
+To get the old single held, dry note per bar, set `"style": "strict"` on the Sub stem in its pack.json.
+
+`npm run clash` audits the plan for 1,200 combinations of key and seed and prints what sounds under each bar for your default seed. Run it after changing any synth. `npm run clash -- --key=F --seeds=500` narrows it.
+
+## Inputs beyond taps (for the later biosensor layer)
+
+```bash
+# toggle / set / stop all
+curl -X POST localhost:8080/api/input -d '{"type":"toggle","stem":3}'
+curl -X POST localhost:8080/api/input -d '{"type":"set","stem":5,"on":true}'
+curl -X POST localhost:8080/api/input -d '{"type":"stopAll"}'
+# continuous 0..1 parameter (currently: brightness → master low-pass)
+curl -X POST localhost:8080/api/input -d '{"type":"param","name":"brightness","value":0.3}'
+```
+
+A sensor bridge (for example a Python HRV/EEG process) can POST these messages, or open `ws://host:8080/ws?role=sensor` and send the same JSON. The *brightness* slider on the engine page uses this same path. It's a placeholder for the design doc's "arousal → brighter timbre" mapping.
+
+## Files
+
+```
+server.js          HTTP + WebSocket hub, state, input handling
+config.json        default pack, tempo, beats/bar, quantize, fade, key, seed
+lib/packs.js       pack discovery + validation
+tools/             list-packs.js (npm run packs), fetch-cc0-stems.js
+public/engine.html audio engine UI (open on the PA machine)
+public/engine.js   clock, scheduling, voices, visual
+public/synth.js    procedural ambient stem generator + WAV export
+public/client.html audience controller
+public/xy.js       per-sample XY pad (volume + low-pass), shared by both pages
+packs/             sample packs (one folder each; see packs/README.md)
+```
+
+## Out of scope (per spec)
+
+Biosensors, per-client audio, auth, cloud hosting and recording. The visual layer is still an open decision. The engine page has a simple generative ring visual (one ring per stem, reacting to its level) as a placeholder.

@@ -1,0 +1,14 @@
+# Render Blueprint: New → Blueprint → pick this repo. Free plan sleeps after ~15 min idle.
+services:
+  - type: web
+    name: resonance-poc
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /api/state
+    envVars:
+      - key: NODE_VERSION
+        value: "20"
+      - key: ENGINE_KEY
+        generateValue: true   # Render creates a random key; copy it from the Environment tab

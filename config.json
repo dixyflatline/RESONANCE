@@ -1,0 +1,10 @@
+{
+  "pack": "layers",
+  "tempo": 70,
+  "beatsPerBar": 4,
+  "key": "D",
+  "seed": 7,
+  "quantize": "beat",
+  "fadeIn": 4,
+  "fadeOut": 4
+}

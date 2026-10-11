@@ -1,0 +1,22 @@
+{
+  "name": "resonance-poc",
+  "version": "0.1.0",
+  "description": "RESONANCE proof of concept: audience-triggered, beat-quantised, phase-aligned ambient stem layering",
+  "main": "server.js",
+  "scripts": {
+    "start": "node tools/run.js",
+    "fetch-stems": "node tools/fetch-cc0-stems.js",
+    "packs": "node tools/list-packs.js",
+    "start:plain": "node server.js",
+    "clash": "node tools/check-clash.js"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "UNLICENSED",
+  "repository": { "type": "git", "url": "git+https://github.com/dixyflatline/RESONANCE.git" },
+  "private": true
+}

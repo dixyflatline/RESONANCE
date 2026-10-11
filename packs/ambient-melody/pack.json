@@ -1,0 +1,14 @@
+{
+  "name": "Ambient + melody",
+  "description": "The generated ambient stems plus four melody variations (A–D) and an arpeggio that follow the same chords on the same 8-bar grid, key and minor mode, so every pad layers cleanly.",
+  "include": [
+    "ambient-generated",
+    "melody-ambient"
+  ],
+  "tags": [
+    "combined",
+    "melody",
+    "generated"
+  ],
+  "order": 12
+}

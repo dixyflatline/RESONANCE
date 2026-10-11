@@ -1,0 +1,73 @@
+{
+  "name": "Field recordings · CC0",
+  "description": "Four public-domain field recordings cut into bar-aligned loops at 70 BPM: water, rain, birds and wind, and a gong. They have no key, so they sit under any music. Run `npm run fetch-stems` to download them.",
+  "tempo": 70,
+  "beatsPerBar": 4,
+  "key": null,
+  "license": "CC0 1.0 (public-domain dedication), Wikimedia Commons",
+  "source": "https://commons.wikimedia.org",
+  "credits": [
+    "Stream: \"Stream / river water up close\" by jackthemurray (via Freesound)",
+    "Rain: \"Light Rain, Distant Thunder, July 5th 2016\" by kvgarlic (via Freesound)",
+    "Garden: \"Garden at Pioneer Works\" by Ogbabydiesal",
+    "Gong: \"Chinese gong, finish of session\" by the_very_Real_Horst (via Freesound)"
+  ],
+  "tags": [
+    "field recording",
+    "CC0"
+  ],
+  "order": 30,
+  "stems": [
+    {
+      "name": "Stream",
+      "role": "field · water",
+      "file": "cc0_stream_16bars_70bpm.wav",
+      "bars": 16,
+      "gain": 0.7,
+      "color": "#4fb0d8",
+      "group": "nature"
+    },
+    {
+      "name": "Rain",
+      "role": "field · rain & thunder",
+      "file": "cc0_rain_16bars_70bpm.wav",
+      "bars": 16,
+      "gain": 0.7,
+      "color": "#7c8fb0",
+      "group": "nature"
+    },
+    {
+      "name": "Garden",
+      "role": "field · birds & wind",
+      "file": "cc0_garden_8bars_70bpm.wav",
+      "bars": 8,
+      "gain": 0.6,
+      "color": "#8fc06a",
+      "group": "nature"
+    },
+    {
+      "name": "Gong",
+      "role": "climax · three people, three strikes",
+      "file": "cc0_gong_8bars_70bpm.wav",
+      "bars": 8,
+      "gain": 0.55,
+      "color": "#d9964a",
+      "group": "climax",
+      "playBars": 4
+    }
+  ],
+  "groups": {
+    "nature": {
+      "name": "Nature samples",
+      "description": "Field recordings. Engagement-driven: it takes two people together to start one, at most two play at once, and they fade away unless someone brings them back.",
+      "preset": "nature",
+      "order": 4
+    },
+    "climax": {
+      "name": "Gong · the climax",
+      "description": "The audience's shared decision that the moment has come: they are satisfied with the current setting, or tired of it. It takes 3 people tapping together to sound it; each vote is one strike; and it sounds only 3 times in a performance. Use it sparingly.",
+      "preset": "climax",
+      "order": 5
+    }
+  }
+}
