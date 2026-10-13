@@ -1,7 +1,7 @@
 {
   "name": "Core synth · 4 layers",
   "description": "Four generated synth layers that form the bed of the piece: Drone, Pad, Atmos (a blend layer that slowly morphs between two timbres) and Noise (filtered-noise waves). They share one chord progression, avoid clashing with the Drone, and sit in the \"core\" group: at least one stays on, participants can only shape them within a gentle range, and they fade slowly.",
-  "tempo": 70,
+  "tempo": 50,
   "beatsPerBar": 4,
   "key": "D",
   "mode": "minor",

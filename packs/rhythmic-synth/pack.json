@@ -1,7 +1,7 @@
 {
   "name": "Rhythmic synth",
   "description": "Generated rhythm and bass: the Pulse heartbeat (tuned to the key) and the Sub bass (chord tones that fit the Drone). Group \"rhythmic\": up to 2 at once, 6 s cooldown, quick entrances.",
-  "tempo": 70,
+  "tempo": 50,
   "beatsPerBar": 4,
   "key": "D",
   "mode": "minor",

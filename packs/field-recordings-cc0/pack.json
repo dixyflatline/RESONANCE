@@ -1,7 +1,7 @@
 {
   "name": "Field recordings · CC0",
-  "description": "Four public-domain field recordings cut into bar-aligned loops at 70 BPM: water, rain, birds and wind, and a gong. They have no key, so they sit under any music. Run `npm run fetch-stems` to download them.",
-  "tempo": 70,
+  "description": "Four public-domain field recordings cut into bar-aligned loops at 50 BPM: water, rain, birds and wind, and a gong. They have no key, so they sit under any music. Run `npm run fetch-stems` to download them.",
+  "tempo": 50,
   "beatsPerBar": 4,
   "key": null,
   "license": "CC0 1.0 (public-domain dedication), Wikimedia Commons",
@@ -21,7 +21,7 @@
     {
       "name": "Stream",
       "role": "field · water",
-      "file": "cc0_stream_16bars_70bpm.wav",
+      "file": "cc0_stream_16bars_50bpm.wav",
       "bars": 16,
       "gain": 0.7,
       "color": "#4fb0d8",
@@ -30,7 +30,7 @@
     {
       "name": "Rain",
       "role": "field · rain & thunder",
-      "file": "cc0_rain_16bars_70bpm.wav",
+      "file": "cc0_rain_16bars_50bpm.wav",
       "bars": 16,
       "gain": 0.7,
       "color": "#7c8fb0",
@@ -39,7 +39,7 @@
     {
       "name": "Garden",
       "role": "field · birds & wind",
-      "file": "cc0_garden_8bars_70bpm.wav",
+      "file": "cc0_garden_8bars_50bpm.wav",
       "bars": 8,
       "gain": 0.6,
       "color": "#8fc06a",
@@ -48,7 +48,7 @@
     {
       "name": "Gong",
       "role": "climax · three people, three strikes",
-      "file": "cc0_gong_8bars_70bpm.wav",
+      "file": "cc0_gong_8bars_50bpm.wav",
       "bars": 8,
       "gain": 0.55,
       "color": "#d9964a",
@@ -59,7 +59,7 @@
   "groups": {
     "nature": {
       "name": "Nature samples",
-      "description": "Field recordings. Engagement-driven: it takes two people together to start one, at most two play at once, and they fade away unless someone brings them back.",
+      "description": "Field recordings. Engagement-driven: it takes two people together to start one, only one plays at once (starting another replaces it), and they fade away unless someone brings them back.",
       "preset": "nature",
       "order": 4
     },

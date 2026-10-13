@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 // Download CC0 field recordings from Wikimedia Commons and turn them into
-// seamless, bar-aligned loops for the RESONANCE PoC (70 BPM, 4/4).
+// seamless, bar-aligned loops for the RESONANCE PoC (50 BPM, 4/4; set TEMPO=60 to cut for another tempo).
 //
-//   npm run fetch-stems          -> writes packs/field-recordings-cc0/cc0_*.wav
+//   npm run fetch-stems          -> writes packs/field-recordings-cc0/cc0_*_50bpm.wav
+//   TEMPO=60 npm run fetch-stems -> the same at another tempo (then point pack.json at the *_60bpm.wav files)
 //
 // No dependencies (Node 18+). Every source is CC0 (public-domain dedication);
 // provenance is written to packs/field-recordings-cc0/CREDITS.md.
@@ -10,37 +11,38 @@
 // Processing per stem (same as the in-browser prototype):
 //  - textures: take a fixed window of (loop + 3 s) from the source, then
 //    equal-power crossfade the extra 3 s into the start so the loop point is seamless
-//  - gong: a single strike placed on bar 1 and bar 5; its tail wraps around the loop
+//  - gong: a single strike placed on bar 1 and bar 5, pitched up GONG_SHIFT semitones (the raw recording is a very low tam-tam,
+//    with almost nothing above 400 Hz, and does not read as a gong); its tail wraps around the loop
 //  - loudness: normalise to a target RMS, soft-limit peaks, cap at -1 dBFS
 
 const fs = require('fs');
 const path = require('path');
 
-const TEMPO = 70, BPB = 4, BAR = (60 / TEMPO) * BPB, XF = 3;
+const TEMPO = Number(process.env.TEMPO) || 50, GONG_SHIFT = Number(process.env.GONG_SHIFT ?? 12), BPB = 4, BAR = (60 / TEMPO) * BPB, XF = 3;
 const OUT = path.join(__dirname, '..', 'packs', 'field-recordings-cc0');
 const LOCAL = process.env.STEMS_SOURCE_DIR; // optional: read sources from disk (offline/testing)
 
 const SOURCES = [
   {
-    out: 'cc0_stream_16bars_70bpm.wav', kind: 'loop', bars: 16, startSec: 9.5, targetDb: -26,
+    out: `cc0_stream_16bars_${TEMPO}bpm.wav`, kind: 'loop', bars: 16, startSec: 9.5, targetDb: -26,
     url: 'https://upload.wikimedia.org/wikipedia/commons/5/54/433589_jackthemurray_stream-river-water-up-close.wav',
     page: 'https://commons.wikimedia.org/wiki/File:433589_jackthemurray_stream-river-water-up-close.wav',
     author: 'jackthemurray (via Freesound)', title: 'Stream / river water up close',
   },
   {
-    out: 'cc0_rain_16bars_70bpm.wav', kind: 'loop', bars: 16, startSec: 29.25, targetDb: -28, soft: true,
+    out: `cc0_rain_16bars_${TEMPO}bpm.wav`, kind: 'loop', bars: 16, startSec: 29.25, targetDb: -28, soft: true,
     url: 'https://upload.wikimedia.org/wikipedia/commons/b/b6/Light_Rain_Distant_Thunder_July_5th_2016.wav',
     page: 'https://commons.wikimedia.org/wiki/File:Light_Rain_Distant_Thunder_July_5th_2016.wav',
     author: 'kvgarlic (via Freesound)', title: 'Light Rain, Distant Thunder, July 5th 2016',
   },
   {
-    out: 'cc0_garden_8bars_70bpm.wav', kind: 'loop', bars: 8, startSec: 2.0, targetDb: -28,
+    out: `cc0_garden_8bars_${TEMPO}bpm.wav`, kind: 'loop', bars: 8, startSec: 2.0, targetDb: -28,
     url: 'https://upload.wikimedia.org/wikipedia/commons/2/25/Garden_at_Pioneer_Works.wav',
     page: 'https://commons.wikimedia.org/wiki/File:Garden_at_Pioneer_Works.wav',
     author: 'Ogbabydiesal', title: 'Garden at Pioneer Works (birds, wind)',
   },
   {
-    out: 'cc0_gong_8bars_70bpm.wav', kind: 'oneshot', bars: 8, onsetFrom: 13.0, onsetTo: 14.2, hitsAtBars: [0, 4], targetDb: -22,
+    out: `cc0_gong_8bars_${TEMPO}bpm.wav`, kind: 'oneshot', bars: 8, onsetFrom: 13.0, onsetTo: 14.2, hitsAtBars: [0, 4], targetDb: -22,
     url: 'https://upload.wikimedia.org/wikipedia/commons/1/16/240382_the-very-real-horst_chinese-gong-finish-session-2014-06-10-29-143.wav',
     page: 'https://commons.wikimedia.org/wiki/File:240382_the-very-real-horst_chinese-gong-finish-session-2014-06-10-29-143.wav',
     author: 'the_very_Real_Horst (via Freesound)', title: 'Chinese gong, finish of session',
@@ -101,6 +103,8 @@ function writeWav(file, [L, R], sampleRate) {
 
 // ---------- DSP ----------
 function loopAt(a, bars, startSec) {
+  const room = Math.floor((a.L.length / a.sampleRate - startSec - XF) / BAR); // whole bars the source can give from startSec
+  if (room < bars) { console.log(`\n   NOTE: the source only holds ${room} bar(s) from ${startSec}s at ${TEMPO} BPM, so this loop is ${room} bars, not ${bars}. Set "bars": ${room} for it in pack.json.`); bars = Math.max(1, room); }
   const sr = a.sampleRate, N = Math.round(bars * BAR * sr), X = Math.round(XF * sr), s = Math.round(startSec * sr);
   if (s + N + X > a.L.length) throw new Error(`source too short for ${bars} bars from ${startSec}s`);
   return [a.L, a.R].map((src) => {
@@ -113,6 +117,16 @@ function loopAt(a, bars, startSec) {
   });
 }
 
+// Resample by `ratio` (>1 = higher pitch and shorter) with Catmull-Rom interpolation.
+function resample(x, ratio) {
+  const n = Math.floor((x.length - 3) / ratio), out = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    const p = i * ratio, k = Math.floor(p), t = p - k, y0 = x[Math.max(0, k - 1)], y1 = x[k], y2 = x[k + 1], y3 = x[k + 2];
+    out[i] = y1 + 0.5 * t * (y2 - y0 + t * (2 * y0 - 5 * y1 + 4 * y2 - y3 + t * (3 * (y1 - y2) + y3 - y0)));
+  }
+  return out;
+}
+
 function oneshotLoop(a, { bars, onsetFrom, onsetTo, hitsAtBars }) {
   const sr = a.sampleRate, N = Math.round(bars * BAR * sr);
   let pk = 0;
@@ -120,12 +134,13 @@ function oneshotLoop(a, { bars, onsetFrom, onsetTo, hitsAtBars }) {
   let on = Math.round(onsetFrom * sr);
   while (Math.abs(a.L[on]) < pk * 0.3) on++;
   on = Math.max(0, on - Math.round(0.005 * sr));
-  const len = a.L.length - on, fadeN = Math.round(0.5 * sr);
-  return [a.L, a.R].map((src) => {
-    const out = new Float32Array(N);
+  const ratio = 2 ** (GONG_SHIFT / 12); // pitch up: the strike also gets shorter by the same factor
+  return [a.L, a.R].map((full) => {
+    const src = ratio === 1 ? full.subarray(on) : resample(full.subarray(on), ratio);
+    const len = src.length, fadeN = Math.round(0.5 * sr), out = new Float32Array(N);
     for (const hb of hitsAtBars) {
       const off = Math.round(hb * BAR * sr);
-      for (let i = 0; i < len; i++) out[(off + i) % N] += src[on + i] * (i > len - fadeN ? (len - i) / fadeN : 1);
+      for (let i = 0; i < len; i++) out[(off + i) % N] += src[i] * (i > len - fadeN ? (len - i) / fadeN : 1);
     }
     return out;
   });

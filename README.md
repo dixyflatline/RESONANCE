@@ -41,6 +41,7 @@ npm start              # server on http://localhost:8080
 2. Click **Start engine**. It renders the stems, then everything starts silent.
 3. Open the **☰ menu** to show the QR code and join link for the audience.
 4. Shape the performance from the sidebar: BPM (the tempo glides to the new value), progression runs (Endless, or 1 to 64 runs, then an automatic fade-out), quantize, key, fades, brightness and master volume. Toggle stems yourself by clicking them; the engine page is not limited by audience rules.
+5. **Chord display for** switches the on-screen chords between concert pitch and **B♭ instruments** (trumpet, clarinet, tenor sax), which read two semitones higher: Dm9 · B♭maj7♯11 · Fmaj9 · C6/9 shows as Em9 · Cmaj7♯11 · Gmaj9 · D6/9. Only the display changes, never the audio, and the choice is remembered in the browser.
 5. **New variation** re-seeds the melodies, bells, arp, bass and rhythm details. **Stop all** fades the layers out in order, colour first and drone last.
 
 **The audience (on their phones)**
@@ -54,7 +55,7 @@ Full details are below: rules, harmony, joining from an iPhone, and the inputs f
 
 ## Sample pack
 
-RESONANCE needs no samples to run. The default packs generate their stems procedurally. For the natural, organic layer, the **Field recordings · CC0** pack is used: four public-domain recordings, cut into seamless bar-aligned loops at 70 BPM.
+RESONANCE needs no samples to run. The default packs generate their stems procedurally. For the natural, organic layer, the **Field recordings · CC0** pack is used: four public-domain recordings, cut into seamless bar-aligned loops at 50 BPM (the default tempo). The Gong is pitched up 12 semitones: the raw recording is a very low tam-tam with almost nothing above 400 Hz and did not read as a gong.
 
 | Layer | Recording | Author | Source |
 |---|---|---|---|
@@ -146,7 +147,7 @@ Samples live in **packs**: one folder per pack under `packs/`. Click **Browse pa
 | `ambient-generated` | The 8 procedural stems (no files needed) |
 | `field-recordings-cc0` | 4 CC0 recordings: Stream, Rain, Garden, Gong (run `npm run fetch-stems`) |
 | `melody-progression` | Generated melody over **1–4–3–6–2–5–1** in the same minor key as the generated stems (i–iv–III–VI–ii°–v–i; 8-bar loop, so it lines up with the ambient stems): Chords, Bass, Arp, Melody. `melody-progression-major` is the major version (set `"mode"` in pack.json). *New variation* re-rolls the melody; *Key* transposes it |
-| `layers` (default) | Five groups, each with its own audience rules: **Core synth** (Drone, Pad, Atmos, Noise), **Melodic** (Arp, Bells, Shimmer, Melody A lyrical, Melody B flowing), **Rhythmic** (Pulse, Sub), **Nature samples** (Stream, Rain, Garden) and a **Gong** accent |
+| `layers` (default) | Five groups, each with its own audience rules: **Core synth** (Drone, Pad, Atmos, Noise), **Melodic** (Arp, Bells, Shimmer, Melody A glide lead, Melody B acid line), **Rhythmic** (Pulse, Sub), **Nature samples** (Stream, Rain, Garden) and a **Gong** accent |
 | `core-synth`, `melodic-synth`, `rhythmic-synth` | The synth groups on their own (`layers` is built from them plus the field recordings) |
 | `melody-ambient` | Four generated melodies to choose from (lyrical, flowing, leaping, bright) + an arpeggio, all **following the ambient stems' chords** (i–VI–III–VII, 8 bars) |
 | `ambient-melody` | The 8 ambient stems plus those melody stems: everything layers freely |
@@ -160,7 +161,7 @@ Samples live in **packs**: one folder per pack under `packs/`. Click **Browse pa
 npm run fetch-stems
 ```
 
-Downloads 4 CC0 recordings from Wikimedia Commons and cuts them into seamless 70 BPM loops in `packs/field-recordings-cc0/`, with a `CREDITS.md`. Until you run it, that pack has no playable stems and is shown as unavailable.
+Downloads 4 CC0 recordings from Wikimedia Commons and cuts them into seamless 50 BPM loops in `packs/field-recordings-cc0/` (`cc0_*_50bpm.wav`), with a `CREDITS.md`. It skips files that already exist; add `-- --force` to rebuild them. Options (environment variables): `TEMPO=60` cuts for another tempo (then point `pack.json` at the `*_60bpm.wav` files), and `GONG_SHIFT=12` sets how many semitones the gong is pitched up (0 = the raw recording). If a source recording is too short for a loop, the tool cuts fewer bars and says which `bars` value to set in `pack.json`. Until you run it, that pack has no playable stems and is shown as unavailable.
 
 | Pad | Source (CC0) | Loop |
 |---|---|---|
@@ -173,11 +174,51 @@ Downloads 4 CC0 recordings from Wikimedia Commons and cuts them into seamless 70
 
 **Export WAVs** on the engine page downloads the generated stems as loop files.
 
+## Chord charts from MusicXML
+
+The generated stems normally follow the built-in progression (Dm9, B♭maj7♯11, Fmaj9, C6/9). **Chord chart (MusicXML)** in the Dantian sidebar replaces it with the chord symbols of a file you choose, and every generated stem (Drone, Pad, Atmos, Sub, Arp, Bells, Shimmer and the melodies) is re-rendered to follow it. The new chart swaps in on the next bar.
+
+1. Notation programs (MuseScore, Finale, Dorico, Sibelius, Noteflight) export MusicXML: **.musicxml**, **.xml** or the compressed **.mxl**. The file must contain chord symbols above the staff.
+2. In the sidebar click **Choose file…** and pick the file. Your computer's file dialog shows any synced drive folder (Google Drive, iCloud, Dropbox); a file that lives only online needs downloading first.
+3. The panel under the picker shows what was read: the bars, the number of chords, the concert key and the chords in concert pitch.
+4. **Built-in progression** goes back to the default.
+
+**B♭ and other transposing parts.** Chord symbols in a B♭ trumpet or clarinet part are written two semitones above the sound. *File symbols are* **Auto** reads the `transpose` tag of the part (concert = written − 2). If a file was exported without that tag, choose **Written for B♭**; if it holds concert-pitch symbols, choose **Concert pitch**. The engine always plays concert pitch. The *Chord display for* menu then shows the chart in concert pitch or in B♭ (+2), so a trumpet player reads the same chords as the file's own.
+
+**Chords per bar.** *Show as written* keeps changes down to half a bar in the chord display; *Show one per bar* keeps the chord that sounds longest in each bar.
+
+**How the arrangement follows a chart.** To keep it ambient and clear, the Pad, Atmos, Arp, Bells, Shimmer and the melodies play one chord per bar: in a bar with two chords (for example Bm7 E7) the first is ignored and the second holds the whole bar. The Drone, Pulse and Sub stay on the tonic and fifth. The registers are kept apart and low. The **Pad** is three voices, one in each octave band (G♯2–G3, A3–G♯4, A4–G♯5), at least a fourth apart, always carrying the third and the seventh when they fit. The **Atmos** is two voices above it (C4–B5) on chord tones the Pad does not use. The **Arp** takes the lowest chord tones from G3 up, the **melody** sits an octave lower than in the built-in arrangement (around E♭3 to B♭4 in E♭), and the **Bells** and **Shimmer** an octave lower too. Notes that two neighbouring chords share are held as one long note instead of being played again, so the changes move by small steps. A chord that is far from the key may get only two Pad voices: the notes that would rub against the Drone are left out. For a chart the Pad is also warmer (triangle and sine with a little saw, slower swells). The chord display still shows every chord as written.
+
+**Details and limits.**
+
+- One measure of the file is one bar of the engine (4/4), whatever its time signature, and the engine's BPM is not changed by the file's tempo.
+- Repeat signs and numbered endings (1st and 2nd time bars) are played out: a 26-measure file with a repeat and two endings becomes the 32 bars that are actually performed, then loops. The panel under the picker says how many bars the file became. Only the first 64 bars are used.
+- The first part that has chord symbols is used. A file with only a melody (no chord symbols) is refused.
+- The Key menu transposes the whole chart. The Drone, Pulse and Sub sit on the chart's tonic and fifth, like the built-in progression.
+- Chord qualities come from the file's `kind` and `degree` elements; the file's own spelling (for example "m7" or "Δ") is shown.
+- [examples/bb-trumpet-example.musicxml](examples/bb-trumpet-example.musicxml) is a 16-bar chart written for B♭ trumpet to try it with.
+
+## Lush voices and Lush reverb
+
+Two switches in the Dantian sidebar (under Quantize and Key, on by default, remembered per browser). Switching re-renders the generated stems, so you can A/B them against the plain sound.
+
+- **Lush voices (Pad and Atmos).** Each note is a five-oscillator unison spread across about ±10–16 cents with a little random jitter, each oscillator panned across the stereo field and each with its own very slow pitch drift (0.05–0.2 Hz, a few cents), so the beating never settles into a pattern. A two-tap chorus (slowly modulated delays panned hard left and right, a whole number of cycles per loop so it wraps) sits on top. When the lowest Pad note lands on the key's tonic or fifth, a quiet sine an octave below it doubles a note the Drone already holds. Levels are trimmed so the layer is about as loud as before.
+- **Lush reverb.** The impulse response is stereo with decorrelated channels, a 30 ms pre-delay, sparse early reflections and a diffuse onset, and the highs die away faster than the lows (like air absorption in a hall, about 8.5 s for the lows). Drone, Sub and Pulse use a small 2 s room so their low end stays tight; every other stem shares the hall, whose wet signal is high-passed at 150 Hz. Pad and Atmos send about 1.6× more into it, and each Atmos note also sends an octave-up sine into the reverb only, so the tail blooms upward (an additive shimmer).
+
+Turning both off gives the earlier sound exactly.
+
+### The two analog leads (Melody A and B)
+
+In the Layers pack the two melodies are long, sparse, monophonic analog voices, nothing like the plucked Arp, Bells and Shimmer. Each plays a few long notes, on bar lines (glide mostly 3–8 bars, acid 2–6 bars), and then rests for one to three bars; every note is a chord tone of the chord sounding when it starts, stays consonant (a chord tone or colour tone, never a semitone from a chord tone) across every chord change and bar line it crosses, and must fit under the Pad, Atmos and bass of every chord it crosses (or is cut at the chord change), and some notes are joined into short legato phrases.
+
+- **Melody A: glide lead.** Two detuned saws plus a square an octave below, through a resonant low-pass that opens on each note and settles, a little tanh warmth and a slow vibrato that fades in. Notes in a phrase are joined by a very slow portamento: the glide takes 55–80% of the new note, so the pitch is almost always on the move. The sound fades in over 2.2 s, the first note scoops up into pitch from two semitones below over 1.2 s, and the filter opens slowly. Register G3–D5, a slow dotted-quarter echo.
+- **Melody B: acid line.** A TB-303-style voice: one saw (sometimes square) into two resonant low-passes in series, hard distortion and a filter that swells open at the start of each note, then settles. Some notes are accented (opens wider, louder). Joined notes are 303-style slides, slowed right down: the glide takes 55–80% of the new note, with the gate held. Each phrase fades in over 4 s with the filter closed at first and a lower resonance, and fades out over about 1.5 s. The tone moves as slowly as the glide: one long filter swell per note, opening over roughly the first half and closing over the rest, with time constants that scale with the note length and no quick filter snaps. Register B♭2–F4 (46–65 in MIDI numbers), a dotted-eighth echo.
+
 ## Generated stems
 
 All stems follow one progression, i – VI – III – VII (Dm9 · B♭maj7♯11 · Fmaj9 · C6/9), with 2 bars per chord:
 
-1. **Drone**: root + fifth, detuned saws, slow filter sweep
+1. **Drone**: tonic, fifth and octave, detuned saws, slow filter sweep. It sits low: the lowest tonic at or above C1 (about 33 Hz), so D is D1 and Eb is Eb1; keys from Ab to B were already that low
 2. **Pad**: chord pad
 3. **Sub**: sine bass limited to D and A (the notes the Drone already holds), picked from the chord's tones; changes note per bar
 4. **Arp**: plucked 8th-note arpeggio with dotted-8th delay
@@ -195,9 +236,9 @@ Each loop is rendered in circular time: the reverb, delay and note tails past th
 Packs can sort stems into groups with rules for remote participants. The `layers` pack has five:
 
 - **Core synth** (Drone, Pad, Atmos, Noise): the bed of the piece. At least one layer always stays on, 3 s cooldown per layer, a gentle XY range (the filter can't be closed all the way, volume can't go to zero), and slow 8 s fades. *Atmos* is a blend layer: two timbres (soft triangle/sine and a brighter saw) play the same chord tones while a slow LFO crossfades between them.
-- **Melodic** (Arp, Bells, Shimmer, Melody A lyrical, Melody B flowing): up to 3 at once (the oldest is replaced), 4 s cooldown, XY range limited, 3 s in / 5 s out. The other two melody variations (C, D) are in the *Ambient + melody* pack.
+- **Melodic** (Arp, Bells, Shimmer, Melody A glide lead, Melody B acid line): up to 3 at once (the oldest is replaced), 4 s cooldown, XY range limited, 3 s in / 5 s out. The four plucked melody variations (lyrical, flowing, leaping, bright) are in the *Ambient + melody* pack.
 - **Rhythmic** (Pulse, Sub): up to 2 at once, 6 s cooldown, quick 1.5 s entrances so they land with the beat.
-- **Nature samples** (Stream, Rain, Garden): engagement-driven. It takes **two people tapping within 10 s** to bring one in (phones show "1/2 joined"), at most two play at once (the oldest is replaced), and each one fades away after 60 s unless brought back.
+- **Nature samples** (Stream, Rain, Garden): engagement-driven. It takes **two people tapping within 10 s** to bring one in (phones show "1/2 joined"), only one plays at once (starting another replaces it), and each one fades away after 60 s unless brought back.
 - **Gong, the climax** (Gong): the audience's shared decision that the moment has come (see *The Gong* below). It takes **three people tapping within 20 s**, each vote is **one strike**, and it sounds **only three times** in a performance.
 
 ### The Gong: the climax
@@ -231,7 +272,7 @@ If the phone can't connect:
 
 ## BPM, runs and play time
 
-In the engine sidebar: The **BPM** slider (40 to 160) shows the new value and play time while you drag; when you let go, the generated stems are re-rendered at that tempo and swapped in together on the next bar. Every control reports its progress in a message at the bottom of the screen (rendering, waiting for the bar, done, or an error). **Progression runs** sets how many times the 8-bar chord progression plays before everything fades out on its own (choices: 1, 8, 16, 32, 64 or Endless). The line underneath estimates the play time: bars per run, time per run, total, and while playing, the current run and time left.
+The default tempo is **50 BPM** (`config.json` and every pack's `pack.json`). In the engine sidebar, from the top: the chord chart picker and chord display, then Quantize and Key, then BPM, then the runs and Lush switches, then the stems, and last the fade in, fade out, brightness and master volume. The **BPM** slider (40 to 160) shows the new value and play time while you drag; when you let go, the generated stems are re-rendered at that tempo and swapped in together on the next bar. Every control reports its progress in a message at the bottom of the screen (rendering, waiting for the bar, done, or an error). **Progression runs** sets how many times the 8-bar chord progression plays before everything fades out on its own (choices: 1, 8, 16, 32, 64 or Endless). The line underneath estimates the play time: bars per run, time per run, total, and while playing, the current run and time left.
 
 The run counter starts when the first stem starts. **Restart run count** begins counting again from now. Recorded sample loops (stream, rain and so on) keep their own length and do not change with BPM; picking a different pack goes back to that pack's tempo.
 
@@ -285,6 +326,8 @@ A sensor bridge (for example a Python HRV/EEG process) can POST these messages, 
 server.js          HTTP + WebSocket hub, state, input handling
 config.json        default pack, tempo, beats/bar, quantize, fade, key, seed
 lib/packs.js       pack discovery + validation
+examples/          bb-trumpet-example.musicxml (a MusicXML chart to try)
+public/musicxml.js  MusicXML / .mxl chord-symbol reader
 tools/             list-packs.js (npm run packs), fetch-cc0-stems.js
 public/engine.html audio engine UI (open on the PA machine)
 public/engine.js   clock, scheduling, voices, visual

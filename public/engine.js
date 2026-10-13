@@ -25,6 +25,9 @@
   let quantize = 'beat';
   let ws = null, started = false, rendering = false;
   let key = 'D', seed = 1;
+  let lush = { voices: true, verb: true }; /* Lush voices / Lush reverb switches (see synth.js); saved per browser */
+  try { const sv = JSON.parse(localStorage.getItem('resonance.lush') || 'null'); if (sv) lush = { voices: sv.voices !== false, verb: sv.verb !== false }; } catch {}
+  let custom = null; /* a chord chart loaded from MusicXML (see the Chord chart picker): replaces the built-in progression in every generated stem */
   let tempoOverride = null; // BPM chosen on this page (procedural stems are re-rendered at it); null = pack tempo
   let pendingStop = false, stopTimer = 0;
   function endStop(text) { pendingStop = false; clearTimeout(stopTimer); toast('stop', 'ok', '✓ ' + text); btnState($('#stopAll'), '✓ Stopped', 'ok'); }
@@ -99,7 +102,7 @@
   document.addEventListener('click', (ev) => { const a = ev.target.closest && ev.target.closest('#urls a'); if (a) { ev.preventDefault(); drawQR(a.getAttribute('href')); } });
 
   /* ---- BPM / runs / play-time estimate ---- */
-  const cycleBars = () => { const g = cfg ? cfg.stems.filter((s) => !s.file).map((s) => s.bars || 8) : []; return g.length ? Math.max(...g) : 8; }; /* the chord cycle = longest generated stem */
+  const cycleBars = () => { const g = cfg ? cfg.stems.filter((s) => !s.file).map((s) => (custom ? custom.bars : s.bars || 8)) : []; return g.length ? Math.max(...g) : 8; }; /* the chord cycle = longest generated stem */
   const cycleSec = () => cycleBars() * cfg.beatsPerBar * 60 / cfg.tempo;
   const fmt = (s) => { s = Math.max(0, Math.round(s)); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
   function updateRunInfo() {
@@ -247,7 +250,7 @@
         if (wait) await sleep((wait + 0.15) * 1000);
         for (const st of stems.values()) for (const n of [st.bus, st.filter, st.xyGain, st.analyser]) { try { n.disconnect(); } catch { /* already gone */ } }
         stems.clear();
-        key = cfg.key || 'D'; seed = cfg.seed ?? 1; $('#key').value = key;
+        key = custom ? key : (cfg.key || 'D'); seed = cfg.seed ?? 1; $('#key').value = key;
         createStemNodes();
         setBuffers(await loadAll());
         t0 = ctx.currentTime + 0.1; lastBeat = -1; lastPlayingSent = '';
@@ -296,7 +299,7 @@
         } else {
           buf = await ResonanceSynth.renderStem({
             synth: def.synth, id: def.id, sampleRate: ctx.sampleRate, tempo,
-            beatsPerBar: cfg.beatsPerBar, bars: def.bars || 8, key, mode: cfg.mode, progression: def.progression, style: def.style, seed,
+            beatsPerBar: cfg.beatsPerBar, bars: def.bars || 8, key, mode: cfg.mode, progression: def.progression, style: def.style, seed, custom, lush,
           });
         }
       } catch (e) { console.error(e); alertBanner(`Stem "${def.name}" failed to load: ${e.message}`); }
@@ -323,6 +326,7 @@
   }
   function loopLen(st) {
     if (st.def.file && tempoOverride) return st.buffer.duration; /* recorded loops keep their own length */
+    if (!st.def.file) return st.buffer.duration; /* a generated stem loops over its whole buffer: its length is the chart's (a 32-bar chart must not be cut to the pack's 8 bars: that jumped the waveform at bars 9, 17, 25 and 1) and its seam is made to be sample-exact */
     const want = (st.def.bars || 8) * barLen();
     return Math.min(want, st.buffer.duration);
   }
@@ -595,19 +599,76 @@
   const cv = $('#viz'), g2 = cv.getContext('2d');
   const tmp = new Float32Array(512);
   // ---------------- Chord display: current chord + a fixed 5-bar page (4-bar phrase + next bar on deck) ----------------
-  let chordTL = null, chordKey = '', chordShown = '', chordBar = -1;
+  let chordTL = null, chordKey = '', chordShown = '', chordBar = -1, chordCurF = -1;
+  let chordTrans = 0; /* display-only transposition in semitones: 0 = concert pitch, 2 = B♭ instruments */
+  try { chordTrans = Number(localStorage.getItem('resonance.chordTrans')) === 2 ? 2 : 0; } catch {}
+  $('#lushVoices').checked = lush.voices; $('#lushVerb').checked = lush.verb;
+  for (const id of ['#lushVoices', '#lushVerb']) $(id).addEventListener('change', async () => {
+    const prev = { ...lush }; lush = { voices: $('#lushVoices').checked, verb: $('#lushVerb').checked };
+    try { localStorage.setItem('resonance.lush', JSON.stringify(lush)); } catch {}
+    if (!started || !cfg) return;
+    if (!(await regenerate(cfg.tempo, 'Lush ' + (lush.voices ? 'voices' : 'plain voices') + ', ' + (lush.verb ? 'new reverb' : 'old reverb'), false))) {
+      lush = prev; $('#lushVoices').checked = lush.voices; $('#lushVerb').checked = lush.verb;
+    }
+  });
+  $('#chordInst').value = String(chordTrans);
+  $('#chordInst').addEventListener('change', (e) => { chordTrans = Number(e.target.value) === 2 ? 2 : 0; try { localStorage.setItem('resonance.chordTrans', chordTrans); } catch {} });
+
+  // ---------------- Chord chart from MusicXML ----------------
+  // Pick a file; its chord symbols replace the built-in progression in every generated stem (and in the chord display).
+  let xmlBuf = null, xmlName = '', xmlSeq = 0;
+  function xmlInfoText(c) {
+    const i = c.info, kn = ResonanceSynth.KEYS[c.tonicPc] + (c.mode === 'minor' ? 'm' : '');
+    const chain = c.chords.slice(0, 16).map((x) => `${ResonanceSynth.KEYS[(c.tonicPc + x.rel + 120) % 12]}${x.q}`).join(' · ') + (c.chords.length > 16 ? ' …' : '');
+    return `<b>${esc(xmlName)}</b>${c.title ? ` · “${esc(c.title)}”` : ''}<br>${c.bars} bars, ${c.chords.length} chords, key ${kn} (concert). Read as ${esc(i.readAs)}.` +
+      `<br>Concert: ${esc(chain)}` + (i.tempo ? `<br>The file says ♩ = ${Math.round(i.tempo)}; the engine BPM is unchanged.` : '') +
+      c.warnings.map((w) => `<br><span class="warn">${esc(w)}</span>`).join('');
+  }
+  async function applyChart(buf, name) {
+    const mine = ++xmlSeq;
+    toast('xml', 'work', `Reading ${name}…`);
+    let chart;
+    try { chart = await ResonanceXML.parse(buf, { written: $('#xmlRead').value, grain: $('#xmlGrain').value }); }
+    catch (err) { toast('xml', 'err', `${name}: ${err.message}`, 9000); $('#xmlInfo').innerHTML = `<span class="warn">${esc(name)}: ${esc(err.message)}</span>`; return false; }
+    if (mine !== xmlSeq) return false;
+    chart.id = `${name}:${Date.now()}`;
+    const prev = { custom, key, name: xmlName }; xmlName = name;
+    custom = chart; key = ResonanceSynth.KEYS[chart.tonicPc]; $('#key').value = key;
+    const label = `Chord chart ${chart.title || name}`;
+    if (!started) { toast('xml', 'ok', `✓ ${name} loaded: ${chart.bars} bars. It will be used when the engine starts`); }
+    else if (!(await regenerate(cfg.tempo, label, false))) { custom = prev.custom; key = prev.key; xmlName = prev.name; $('#key').value = key; toast('xml', 'err', `${name} could not be applied`); return false; }
+    $('#xmlInfo').innerHTML = xmlInfoText(chart); $('#xmlReset').disabled = false; updateRunInfo();
+    toast('xml', 'ok', `✓ ${name}: ${chart.bars} bars, ${chart.chords.length} chords, key ${key}`);
+    return true;
+  }
+  $('#xmlPick').addEventListener('click', () => $('#xmlFile').click());
+  $('#xmlFile').addEventListener('change', async (e) => {
+    const f = e.target.files && e.target.files[0]; e.target.value = ''; if (!f) return;
+    if (f.size > 8 * 1024 * 1024) { toast('xml', 'err', `${f.name} is too large for a chord chart (over 8 MB)`); return; }
+    const buf = await f.arrayBuffer(); xmlBuf = buf; await applyChart(buf, f.name);
+  });
+  for (const id of ['#xmlRead', '#xmlGrain']) $(id).addEventListener('change', () => { if (xmlBuf && custom) applyChart(xmlBuf, xmlName); });
+  $('#xmlReset').addEventListener('click', async () => {
+    const prev = { custom, key, name: xmlName }; custom = null; xmlBuf = null; key = (cfg && cfg.key) || 'D'; $('#key').value = key;
+    if (started && !(await regenerate(cfg.tempo, 'Built-in progression', false))) { custom = prev.custom; key = prev.key; $('#key').value = key; return; }
+    $('#xmlInfo').textContent = 'Using the built-in progression.'; $('#xmlReset').disabled = true; xmlName = ''; updateRunInfo();
+    if (!started) toast('xml', 'ok', '✓ Built-in progression will be used');
+  });
   function updateChords(pos) {
     const panel = $('#chordPanel');
     const ref = cfg && cfg.stems.find((s) => s.synth);
     if (!ref) { panel.hidden = true; return; } // audio-file pack: no chord data
-    const k = `${curPackId}|${key}|${cfg.mode}`;
+    const k = `${curPackId}|${key}|${cfg.mode}|${chordTrans}|${custom ? custom.id : ''}`;
     if (k !== chordKey) {
       chordKey = k; chordShown = ''; chordBar = -1;
-      chordTL = ResonanceSynth.chordTimeline({ synth: ref.synth, progression: ref.progression, bars: ref.bars || 8, key, mode: cfg.mode });
+      chordTL = ResonanceSynth.chordTimeline({ synth: ref.synth, progression: ref.progression, bars: ref.bars || 8, key, mode: cfg.mode, transpose: chordTrans, custom });
     }
     panel.hidden = false;
     const L = chordTL.bars, barF = ((pos / barLen()) % L + L) % L, bar = Math.floor(barF);
     const idxAt = (b) => { const x = ((b % L) + L) % L; return chordTL.chords.findIndex((c) => x >= c.start && x < c.start + c.len); };
+    const curF = idxAt(barF); /* the chord sounding right now (a chart can change chords mid-bar) */
+    const within = (b) => chordTL.chords.filter((c) => c.start < b + 1 && c.start + c.len > b); /* every chord that sounds in bar b */
+    const label = (b) => { const w = within(((b % L) + L) % L); return { n: w.map((c) => c.name).join('  '), r: w.map((c) => c.roman).join(' ') }; };
     // Fixed page of 5 bars: the 4 bars of the current phrase + the first bar of the next phrase ("on deck").
     // The page only changes when a new phrase starts; the highlight is what moves.
     const ph = Math.floor(bar / 4), start = ph * 4, deckBar = start + 4 >= L ? 0 : start + 4;
@@ -617,16 +678,16 @@
       chordShown = pageSig;
       $('#chordBars').innerHTML = cells.map((b, j) => {
         if (b === null) return '<div class="cb empty"></div>';
-        const ch = chordTL.chords[idxAt(b)];
-        const same = j > 0 && j < 4 && cells[j - 1] !== null && idxAt(cells[j - 1]) === idxAt(b);
-        return `<div class="cb${same ? ' same' : ''}${j === 4 ? ' deck' : ''}" data-bar="${b}" data-ci="${idxAt(b)}"><div class="b">${j === 4 ? 'next · ' : ''}${b + 1}</div><div class="n">${ch.name}</div><div class="r">${ch.roman}</div><div class="fill"></div></div>`;
+        const ch = chordTL.custom ? label(b) : { n: chordTL.chords[idxAt(b)].name, r: chordTL.chords[idxAt(b)].roman };
+        const same = j > 0 && j < 4 && cells[j - 1] !== null && (chordTL.custom ? label(cells[j - 1]).n === ch.n : idxAt(cells[j - 1]) === idxAt(b));
+        return `<div class="cb${same ? ' same' : ''}${j === 4 ? ' deck' : ''}" data-bar="${b}" data-ci="${idxAt(b)}"><div class="b">${j === 4 ? 'next · ' : ''}${b + 1}</div><div class="n">${ch.n}</div><div class="r">${ch.r}</div><div class="fill"></div></div>`;
       }).join('');
     }
-    if (bar !== chordBar) { // move the highlight (cheap: class changes only)
-      chordBar = bar;
-      const cur = idxAt(bar), c = chordTL.chords[cur];
+    if (bar !== chordBar || curF !== chordCurF) { // move the highlight (cheap: class changes only)
+      chordBar = bar; chordCurF = curF;
+      const cur = idxAt(bar), c = chordTL.chords[curF >= 0 ? curF : cur];
       $('#cName').textContent = c.name; $('#cRoman').textContent = c.roman;
-      $('#cBar').textContent = `bar ${bar - c.start + 1} of ${c.len} · loop bar ${bar + 1}/${L} · phrase ${ph + 1}`;
+      $('#cBar').textContent = (chordTL.custom ? `bar ${bar + 1} of ${L} · phrase ${ph + 1}` : `bar ${bar - c.start + 1} of ${c.len} · loop bar ${bar + 1}/${L} · phrase ${ph + 1}`) + (chordTrans ? ` · B♭ parts, key of ${chordTL.keyName} (concert +${chordTrans})` : '');
       const els = [...document.querySelectorAll('#chordBars .cb[data-bar]')];
       const nowI = els.findIndex((el, j) => j < 4 && Number(el.dataset.bar) === bar);
       els.forEach((el, j) => {

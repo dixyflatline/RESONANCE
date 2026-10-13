@@ -86,6 +86,8 @@ function switchOff(id, why) {
   log(`stem ${id} off (${why})`);
 }
 function switchOn(id, byAudience) {
+  const g = groupOf(id), gr = g && g.rules; // a group's maxActive holds for every source (engine sidebar, HTTP, phones): the oldest steps aside
+  if (gr && gr.maxActive && gr.onFull !== 'ignore') for (const o of groupActive(g).filter((s) => s.id !== id).sort((x, y) => (startedAt.get(x.id) || 0) - (startedAt.get(y.id) || 0)).slice(0, Math.max(0, groupActive(g).filter((s) => s.id !== id).length - gr.maxActive + 1))) switchOff(o.id, 'replaced');
   state.active.add(id); startedAt.set(id, Date.now());
   const r = rulesOf(id);
   if (byAudience && r && r.decay) {

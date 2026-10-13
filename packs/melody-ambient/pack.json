@@ -1,7 +1,7 @@
 {
   "name": "Melody · follows ambient chords",
   "description": "Four generated melodies (A lyrical, B flowing, C leaping, D bright) plus an arpeggio, all following the ambient stems' chords (Dm9 · B♭maj7♯11 · Fmaj9 · C6/9, 2 bars each, 8-bar loop, D minor). Switch one on at a time to audition, or layer them. New variation re-rolls all four; Key transposes.",
-  "tempo": 70,
+  "tempo": 50,
   "beatsPerBar": 4,
   "key": "D",
   "mode": "minor",

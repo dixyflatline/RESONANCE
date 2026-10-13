@@ -111,6 +111,7 @@
   #dock #regen { background:#27406e; border-color:#3d5f9c; font-weight:600; }
   @media (max-width: 800px) { body { grid-template-columns:1fr; grid-template-rows:auto 60vh; height:auto; } }
 #bpmRow{display:flex;align-items:center;gap:4px}#bpmRow input{flex:1;min-width:0}#bpmRow button{width:40px;padding:6px 0;font-size:20px;line-height:1}#bpmNow{font-size:26px;margin-left:6px;vertical-align:middle}#bpmTgt{margin-left:8px}
+#xmlBox{display:flex;flex-direction:column;gap:6px}#xmlBox button{padding:7px 6px;font-size:12px}#xmlInfo b{color:var(--text)}#xmlInfo .warn{color:#e8a33d}
 </style>
 </head>
 <body>
@@ -140,8 +141,24 @@
 
   <div class="row"><span class="label">Position (bar.beat)</span><span><span id="conn" class="bad">connecting…</span> · <span id="clients">0</span> phones</span></div>
   <div class="row"><span id="pos">–.–</span><span id="tempo" class="label"></span></div>
-
-  <div><span class="label">BPM now</span> <b id="bpmNow">70</b><span id="bpmTgt" class="label" hidden> → target <b id="bpmVal" style="color:var(--text)">70</b></span><span hidden><b id="bpmValHold"></b></span><div id="bpmRow"><button id="bpmDn" type="button" title="1 BPM slower (Shift: 5)">−</button><input id="bpm" type="range" min="40" max="160" step="1" value="70" title="Release to apply: the tempo glides to the new BPM in small steps"><button id="bpmUp" type="button" title="1 BPM faster (Shift: 5)">+</button></div></div>
+  <div id="xmlBox">
+    <span class="label">Chord chart (MusicXML)</span>
+    <div class="grid2"><button id="xmlPick" type="button" title="Pick a .musicxml, .xml or .mxl file with chord symbols from this computer or a synced drive folder">Choose file…</button><button id="xmlReset" type="button" disabled title="Go back to the built-in progression">Built-in progression</button></div>
+    <input id="xmlFile" type="file" accept=".musicxml,.xml,.mxl" hidden>
+    <div class="grid2">
+      <label><span class="label">File symbols are</span><select id="xmlRead"><option value="auto">Auto (follow the file)</option><option value="bb">Written for B♭ (−2)</option><option value="concert">Concert pitch</option></select></label>
+      <label><span class="label">Chords per bar</span><select id="xmlGrain"><option value="half">Show as written</option><option value="bar">Show one per bar</option></select></label>
+    </div>
+    <div id="xmlInfo" class="muted" style="font-size:12px">Using the built-in progression.</div>
+  </div>
+  <label><span class="label">Chord display for</span>
+    <select id="chordInst" title="Changes only what is written on screen, not the audio"><option value="0">Concert pitch (C instruments, keys, voice)</option><option value="2">B♭ instruments: trumpet, clarinet, tenor sax (+2)</option></select></label>
+  <div class="grid2">
+    <label><span class="label">Quantize</span>
+      <select id="quantize"><option value="beat">Beat</option><option value="half">Half bar</option><option value="bar">Bar</option></select></label>
+    <label><span class="label">Key</span><select id="key"></select></label>
+  </div>
+  <div><span class="label">BPM now</span> <b id="bpmNow">50</b><span id="bpmTgt" class="label" hidden> → target <b id="bpmVal" style="color:var(--text)">50</b></span><span hidden><b id="bpmValHold"></b></span><div id="bpmRow"><button id="bpmDn" type="button" title="1 BPM slower (Shift: 5)">−</button><input id="bpm" type="range" min="40" max="160" step="1" value="50" title="Release to apply: the tempo glides to the new BPM in small steps"><button id="bpmUp" type="button" title="1 BPM faster (Shift: 5)">+</button></div></div>
   <button id="applyBpm" hidden style="display:none" title="Re-renders the generated stems at the new BPM and swaps them in on the next bar">Apply BPM</button>
   <div class="grid2">
     <label><span class="label">Progression runs</span>
@@ -149,22 +166,21 @@
     <div style="display:flex;flex-direction:column;justify-content:flex-end"><button id="restartRun" title="Start counting runs from now" style="padding:8px;font-size:13px">Restart run count</button></div>
   </div>
   <div id="runInfo" class="muted" style="font-size:12px"></div>
-  <div class="grid2">
-    <label><span class="label">Quantize</span>
-      <select id="quantize"><option value="beat">Beat</option><option value="half">Half bar</option><option value="bar">Bar</option></select></label>
-    <label><span class="label">Key</span><select id="key"></select></label>
+  <div class="grid2" id="lushRow" title="Pad and Atmos: thick drifting unison + chorus. Reverb: damped stereo hall (small room for Drone, Sub, Pulse). Switching re-renders the generated stems.">
+    <label style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="lushVoices" checked><span>Lush voices</span></label>
+    <label style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="lushVerb" checked><span>Lush reverb</span></label>
   </div>
+  <div>
+    <div class="label" style="margin-bottom:6px">Stems (click to toggle · small square = volume / filter XY)</div>
+    <div id="stems"></div>
+  </div>
+
   <div class="grid2">
     <label><span class="label">Fade in <span id="fadeInVal"></span></span><input id="fadeIn" type="range" min="0.5" max="16" step="0.5" value="4"></label>
     <label><span class="label">Fade out <span id="fadeOutVal"></span></span><input id="fadeOut" type="range" min="0.5" max="16" step="0.5" value="4"></label>
   </div>
   <label><span class="label">Brightness (sensor-ready param)</span><input id="bright" type="range" min="0" max="1" step="0.01" value="0.85"></label>
   <label><span class="label">Master volume</span><input id="vol" type="range" min="0" max="1.2" step="0.01" value="0.9"></label>
-  <div>
-    <div class="label" style="margin-bottom:6px">Stems (click to toggle · small square = volume / filter XY)</div>
-    <div id="stems"></div>
-  </div>
-
   <button id="export" title="Download the generated stems as WAV loops">Export WAVs</button>
   <div id="dock">
     <button id="regen" title="New random seed: new melodies, bells, arp, bass and rhythm details. Swaps in on the next bar.">New variation</button>
@@ -196,6 +212,7 @@
 </div>
 <script src="xy.js"></script>
 <script src="synth.js"></script>
+<script src="musicxml.js"></script>
 <script src="vendor/qrcode.js"></script>
 <script src="engine.js"></script>
 </body>

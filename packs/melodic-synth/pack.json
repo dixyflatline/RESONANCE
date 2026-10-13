@@ -1,7 +1,7 @@
 {
   "name": "Melodic synth",
   "description": "Generated melodic layers over the ambient chords: Arp, Bells, Shimmer and two generated melodies (A lyrical, B flowing). Notes avoid clashing with the Drone. Group \"melodic\": up to 3 at once, 4 s cooldown.",
-  "tempo": 70,
+  "tempo": 50,
   "beatsPerBar": 4,
   "key": "D",
   "mode": "minor",
@@ -49,9 +49,9 @@
     },
     {
       "name": "Melody A",
-      "role": "lyrical lead",
+      "role": "glide lead (analog mono, long glissandi)",
       "synth": "melody",
-      "style": "lyrical",
+      "style": "glide",
       "progression": "ambient",
       "bars": 8,
       "gain": 0.8,
@@ -60,9 +60,9 @@
     },
     {
       "name": "Melody B",
-      "role": "flowing lead",
+      "role": "acid line (TB-303 style, sparse)",
       "synth": "melody",
-      "style": "flowing",
+      "style": "acid",
       "progression": "ambient",
       "bars": 8,
       "gain": 0.8,

@@ -1,7 +1,7 @@
 {
   "name": "Ambient · generated",
   "description": "Eight synthesised stems, one per sonic role, built in the browser, so there are no files to download. They share one chord progression (Dm9 · B♭maj7♯11 · Fmaj9 · C6/9) and loop seamlessly over 8 bars.",
-  "tempo": 70,
+  "tempo": 50,
   "beatsPerBar": 4,
   "key": "D",
   "seed": 7,
