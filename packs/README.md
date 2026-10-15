@@ -45,6 +45,7 @@ Add a `pack.json` to set names, roles, colours and levels:
 | stem `file` | A WAV (checked for length) or mp3/ogg/flac/m4a (not checked), relative to the pack folder. |
 | stem `synth` | Instead of a file: `drone`, `pad`, `sub`, `arp`, `texture`, `pulse`, `bells`, `shimmer`, `atmos` (minor progression), or `mchords`, `mbass`, `marp`, `melody` (progression 1–4–3–6–2–5–1, or the ambient stems' chords when the stem has `"progression": "ambient"`, in the pack's `"mode"`: `"minor"` (default) or `"major"`; 8 bars gives chords of 2,1,1,1,1,1,1 bars; 14 gives 2 bars each), generated in the browser. |
 | stem `style` | For `melody`: `lyrical`, `flowing`, `leaping` or `bright` (the melody's character). |
+| stem `about` | One or two plain-language sentences about the sound, shown on the phone's pad. Generated synths have a built-in description; recordings should set their own. |
 | stem `bars` | Loop length on the grid. If the file is longer, the extra audio is ignored. |
 | stem `gain` | Level, 0 to 1 (default 0.7). |
 | stem `fadeIn`, `fadeOut` | Per-pad fade times in seconds (default: the engine's sliders). |
@@ -71,12 +72,15 @@ A group picks a **preset** (`core`, `melodic`, `rhythmic`, `nature`, `accent`, `
 | Rule | Meaning |
 |---|---|
 | `toggle` | Participants may switch stems on and off (default true). |
-| `xy`, `xyRange` | Participants may move the XY pad, limited to `{ "x": [lo, hi], "y": [lo, hi] }` (0 to 1). |
+| `xy`, `xyRange`, `volRange` | Participants may move the pad, limited to `{ "x": [lo, hi], "y": [lo, hi] }` (0 to 1): x = complexity, y = filter cutoff. `volRange` (`[lo, hi]`) limits the volume fader. |
+| `complexity` | `true` gives the group's generated melodic and rhythmic synths (arp, bells, shimmer, melody, pulse, sub) a complexity axis: they are rendered as a sparse base plus two layers that add notes, and X on the pad fades the layers in (the melodic and rhythmic presets). Other stems ignore X. |
 | `maxActive`, `onFull` | At most N of the group on at once. `"replace-oldest"` fades out the longest-running one, `"ignore"` refuses the tap. |
 | `minActive` | This many stems can't be switched off by participants, so a bed always plays. |
 | `cooldown` | Seconds before the same stem can be changed again. |
 | `gate` | `{ "participants": 2, "window": 10 }`: that many different people must tap within the window. Phones show "1/2 joined". |
 | `decay` | Seconds a participant-started stem plays before it fades away by itself. |
+| `hidden` | `true` hides the whole group from the phones: no pads, taps and XY are refused. Only the engine page, HTTP and sensors control it (the core preset). |
+| `finale` | `true` makes starting a stem of this group the end-of-show signal (the climax preset): the stem strikes three times and every other stem fades out in stages. Further taps are ignored until a new show. |
 | `maxPlays` | The most times participants can start a stem in one performance (the gong uses 3). The count resets with a new performance (Start engine, Restart run count, pack switch). Phones show "N left", then "spent". |
 | `oneShot` | The stem plays once from its start instead of looping, lands on a bar line, and participants can't switch it off. The stem's `"playBars": N` limits how many bars of the file play. |
 | `fadeIn`, `fadeOut` | Fade times (seconds) for the group's stems. |

@@ -23,11 +23,14 @@
   let playsState = {};     // stem id -> { used, max }: how many times participants have started a limited stem (the gong) this performance
   let lastPlayingSent = '';
   let quantize = 'beat';
+  /* tell the phones how long a tap can wait (as a share of a bar: params are 0..1), so their switch can say "waiting for the next bar" */
+  const reportQuantize = () => send({ type: 'param', name: 'quantizeBar', value: quantize === 'bar' ? 1 : quantize === 'half' ? 0.5 : 1 / cfg.beatsPerBar });
   let ws = null, started = false, rendering = false;
   let key = 'D', seed = 1;
   let lush = { voices: true, verb: true }; /* Lush voices / Lush reverb switches (see synth.js); saved per browser */
   try { const sv = JSON.parse(localStorage.getItem('resonance.lush') || 'null'); if (sv) lush = { voices: sv.voices !== false, verb: sv.verb !== false }; } catch {}
   let custom = null; /* a chord chart loaded from MusicXML (see the Chord chart picker): replaces the built-in progression in every generated stem */
+  let packTempo = null; // the pack's own BPM: recorded one-shots (the gong) are cut to it and keep their length in seconds whatever BPM is chosen
   let tempoOverride = null; // BPM chosen on this page (procedural stems are re-rendered at it); null = pack tempo
   let pendingStop = false, stopTimer = 0;
   function endStop(text) { pendingStop = false; clearTimeout(stopTimer); toast('stop', 'ok', '✓ ' + text); btnState($('#stopAll'), '✓ Stopped', 'ok'); }
@@ -41,8 +44,8 @@
 
   // ---------------- WebSocket ----------------
   function connect() {
-    ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws?role=engine&key=${encodeURIComponent(engineKey)}`);
-    ws.onopen = () => setConn(true);
+    ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws?role=engine&standby=1&key=${encodeURIComponent(engineKey)}`); // standby: opening the page does not take over from a running engine; pressing Start does
+    ws.onopen = () => { setConn(true); if (started) send({ type: 'claim' }); /* a reconnect of the running engine */ };
     ws.onclose = (e) => {
       setConn(false);
       if (e.code === 4001) { alertBanner('This server needs the engine key. Open this page as /engine?key=YOUR_ENGINE_KEY'); return; }
@@ -63,7 +66,7 @@
     const first = !cfg;
     if (!first && c.build && cfg.build && c.build !== cfg.build) $('#updateBar').hidden = false; // code changed on the server: offer a page reload
     const packChanged = !first && cfg.pack && c.pack && cfg.pack.id !== c.pack.id;
-    cfg = c;
+    cfg = c; packTempo = c.tempo; // the tempo the pack's recorded files were cut at
     if (packChanged) tempoOverride = null;
     if (tempoOverride) cfg = { ...c, tempo: tempoOverride };
     cfg.tempo = cfg.tempo;
@@ -76,7 +79,7 @@
     if (first) {
       quantize = c.quantize || 'beat';
       key = c.key || 'D'; seed = c.seed ?? 1;
-      $('#quantize').value = quantize;
+      $('#quantize').value = quantize; reportQuantize();
       $('#key').value = key;
       $('#fadeIn').value = c.fadeIn ?? c.fade ?? 4; $('#fadeOut').value = c.fadeOut ?? c.fade ?? 4;
       $('#fadeInVal').textContent = Number($('#fadeIn').value).toFixed(1) + ' s';
@@ -135,6 +138,7 @@
   $('#bpmDn').addEventListener('click', e => bBump(e, -1));
   $('#bpmUp').addEventListener('click', e => bBump(e, 1));
   bpmEl.addEventListener('input', () => { showBpm(); updateRunInfo(); });
+  const anyVoice = () => [...stems.values()].some((s) => s.voice); // is any stem playing (or waiting to start)?
   async function pumpBpm() {
     if (bpmBusy) return; bpmBusy = true;
     try {
@@ -142,7 +146,7 @@
       while ((v = Number($('#bpm').value)) !== cfg.tempo) {
         if (!started) { toast('bpm', 'ok', `✓ ${v} BPM will be used when the engine starts`); cfg.tempo = v; tempoOverride = v; $('#tempo').textContent = `${v} BPM · ${cfg.beatsPerBar}/4`; break; }
         while (rendering || switching) await sleep(200);
-        const step = Math.abs(v - cfg.tempo) <= GLIDE ? v : cfg.tempo + Math.sign(v - cfg.tempo) * GLIDE;
+        const step = (Math.abs(v - cfg.tempo) <= GLIDE || !anyVoice()) ? v : cfg.tempo + Math.sign(v - cfg.tempo) * GLIDE; /* nothing playing: no glide to hide, go straight to the target */
         if (!(await regenerate(step, step === v ? `Tempo ${v} BPM` : `Tempo → ${step} of ${v} BPM`, false))) break;
       }
     } finally { bpmBusy = false; updateRunInfo(); }
@@ -163,27 +167,30 @@
   })();
 
   function onXY(id, p) {
-    xyState[id] = { x: p.x, y: p.y };
+    xyState[id] = { x: p.x ?? ResonanceXY.XY_DEFAULT.x, y: p.y ?? ResonanceXY.XY_DEFAULT.y, v: p.v ?? ResonanceXY.XY_DEFAULT.v };
     applyXY(id);
     const mini = document.querySelector(`.stemrow[data-id="${id}"] .xy-mini`);
     if (mini) mini.setXY(xyState[id]);
     if (sheet) sheet.update(id, xyState[id]);
   }
 
-  // XY -> per-stem low-pass cutoff (x) and volume (y), smoothed to avoid zipper noise.
+  // Pad -> per-stem low-pass cutoff (y), volume (v) and complexity layers (x), smoothed to avoid zipper noise.
+  // Complexity: a stem with layers (see renderStem) plays its base loop plus two layers that add notes; x fades the layers in and out.
   function applyXY(id) {
     const st = stems.get(id), p = xyState[id];
     if (!st || !p || !ctx) return;
     const t = ctx.currentTime;
-    st.filter.frequency.setTargetAtTime(ResonanceXY.cutoffHz(p.x), t, 0.03);
-    st.xyGain.gain.setTargetAtTime(ResonanceXY.volume(p.y), t, 0.03);
+    st.filter.frequency.setTargetAtTime(ResonanceXY.cutoffHz(p.y), t, 0.03);
+    st.xyGain.gain.setTargetAtTime(ResonanceXY.volume(p.v), t, 0.03);
+    if (st.voice && st.voice.lg) st.voice.lg.forEach((g, k) => g.gain.setTargetAtTime(ResonanceXY.layerGain(p.x, k), t, 0.15)); /* a slow glide: the layers swell in and out, no clicks */
   }
+  const layerGainNow = (st, k) => ResonanceXY.layerGain((xyState[st.def.id] || ResonanceXY.XY_DEFAULT).x, k);
 
   function onState(s) {
     $('#clients').textContent = s.clients;
     if (s.xy) for (const [id, p] of Object.entries(s.xy)) {
       const cur = xyState[id];
-      if (!cur || cur.x !== p.x || cur.y !== p.y) onXY(Number(id), p);
+      if (!cur || cur.x !== p.x || cur.y !== p.y || cur.v !== p.v) onXY(Number(id), p);
     }
     desired = new Set(s.active);
     playsState = s.plays || {};
@@ -192,7 +199,9 @@
       $('#bright').value = s.params.brightness;
       applyBrightness(s.params.brightness);
     }
-    if (started && !rendering && !switching) reconcile();
+    if (s.finale && !finale && !finaleDone && started && !rendering && !switching) startFinale();
+    else if (!s.finale && (finale || finaleDone)) cancelFinale(); /* a new show: stop everything of the old finale */
+    if (started && !rendering && !switching && !finale && !finaleDone) reconcile();
     renderRows();
   }
 
@@ -211,12 +220,12 @@
     createStemNodes();
     setBuffers(await loadAll());
     t0 = ctx.currentTime + 0.1;
-    started = true;
+    started = true; showSong();
     $('#gate').hidden = true;
     setInterval(clockLoop, 15);
     requestAnimationFrame(draw);
     /* Every engine start begins silent: drop whatever was left active on the server (audience taps made before the start, a previous run) */
-    send({ type: 'stopAll' }); send({ type: 'newShow' }); desired = new Set(); runStart = null; runEnded = false;
+    send({ type: 'claim' }); send({ type: 'stopAll' }); send({ type: 'newShow' }); desired = new Set(); runStart = null; runEnded = false;
     if (cfg.pack && cfg.pack.id !== curPackId) await switchPack(); // pack changed while we were loading
     else reconcile();
   }
@@ -227,12 +236,12 @@
     curPackId = cfg.pack ? cfg.pack.id : null;
     for (const def of cfg.stems) {
       const bus = ctx.createGain(); bus.gain.value = def.gain ?? 0.7;
-      const filter = ctx.createBiquadFilter(); filter.type = 'lowpass'; filter.Q.value = 0.9; filter.frequency.value = 20000;
+      const filter = ctx.createBiquadFilter(); filter.type = 'lowpass'; filter.Q.value = 1.3; /* a touch of resonance so a cutoff sweep sings */ filter.frequency.value = 20000;
       const xyGain = ctx.createGain();
       const analyser = ctx.createAnalyser(); analyser.fftSize = 512;
       bus.connect(filter).connect(xyGain);
       xyGain.connect(analyser); xyGain.connect(master);
-      stems.set(def.id, { def, buffer: null, bus, filter, xyGain, analyser, voice: null, stopUntil: 0, level: 0 });
+      stems.set(def.id, { def, buffer: null, layers: [], bus, filter, xyGain, analyser, voice: null, stopUntil: 0, level: 0 });
     }
     for (const def of cfg.stems) applyXY(def.id);
   }
@@ -299,7 +308,7 @@
         } else {
           buf = await ResonanceSynth.renderStem({
             synth: def.synth, id: def.id, sampleRate: ctx.sampleRate, tempo,
-            beatsPerBar: cfg.beatsPerBar, bars: def.bars || 8, key, mode: cfg.mode, progression: def.progression, style: def.style, seed, custom, lush,
+            beatsPerBar: cfg.beatsPerBar, bars: def.bars || 8, key, mode: cfg.mode, progression: def.progression, style: def.style, seed, custom, lush, tiers: !!def.complexity,
           });
         }
       } catch (e) { console.error(e); alertBanner(`Stem "${def.name}" failed to load: ${e.message}`); }
@@ -342,16 +351,24 @@
 
   // Each voice: source -> fadeIn gain -> fadeOut gain -> stem bus.
   // Two separate gains so a stop during a fade-in never jumps: the fade-out simply multiplies on top.
-  function startVoice(st, when) {
+  function startVoice(st, when, o = {}) {
     if (st.def.oneShot) { /* a strike: plays once from its start (not looped, not phase-aligned), the tail fades out at the end */
-      const len = Math.min((st.def.playBars || 8) * barLen(), st.buffer.duration);
-      const src = ctx.createBufferSource(); src.buffer = st.buffer; src.loop = false;
-      const gIn = ctx.createGain(), gOut = ctx.createGain();
+      /* the strike window is part of the recording, so it is measured at the tempo the file was cut at, not at the current BPM: at a slower BPM a window of N current bars ran on into the repeat of the strike (the gong rang twice, close together) */
+      const nativeBar = (60 / (packTempo || cfg.tempo)) * cfg.beatsPerBar;
+      const len = Math.min((st.def.playBars || 8) * nativeBar, st.buffer.duration);
+      const rate = o.rate || 1, D = len / rate; /* o.rate < 1 plays the strike lower (and longer) */
+      const src = ctx.createBufferSource(); src.buffer = st.buffer; src.loop = false; src.playbackRate.value = rate;
+      const gIn = ctx.createGain(), gOut = ctx.createGain(), gv = ctx.createGain(); gv.gain.value = o.level ?? 1;
       gIn.gain.value = 0; gIn.gain.setValueCurveAtTime(FADE_IN_CURVE, when, fadeIn(st));
-      gOut.gain.setValueAtTime(1, Math.max(when, when + len - 1.5)); gOut.gain.linearRampToValueAtTime(0, when + len);
-      src.connect(gIn).connect(gOut).connect(st.bus);
+      gOut.gain.setValueAtTime(1, Math.max(when, when + D - 1.5)); gOut.gain.linearRampToValueAtTime(0, when + D);
+      let tail = gOut; src.connect(gIn).connect(gOut);
+      if (o.darken) { /* the ring loses its highs slowly: it darkens as it dies away */
+        const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.Q.value = 0.4; lp.frequency.setValueAtTime(9000, when); lp.frequency.setTargetAtTime(1000, when + 0.5, D * 0.22);
+        gOut.connect(lp); tail = lp;
+      }
+      tail.connect(gv); gv.connect(st.bus); if (o.send) gv.connect(o.send);
       src.start(when, 0, len);
-      return { src, g: gOut, start: when, end: when + len };
+      return { src, g: gOut, start: when, end: when + D };
     }
     const L = loopLen(st);
     const offset = (((when - t0) % L) + L) % L; // phase-aligned entry
@@ -362,20 +379,26 @@
     gIn.gain.setValueCurveAtTime(FADE_IN_CURVE, when, fadeIn(st)); // always starts from silence
     src.connect(gIn).connect(gOut).connect(st.bus);
     src.start(when, offset);
-    return { src, g: gOut, start: when };
+    const srcs = [src], lg = [];
+    (st.layers || []).forEach((lb, k) => { /* complexity layers: the same loop length and phase, each through its own gain that the pad's X axis moves */
+      const ls = ctx.createBufferSource(); ls.buffer = lb; ls.loop = true; ls.loopStart = 0; ls.loopEnd = L;
+      const g = ctx.createGain(); g.gain.value = layerGainNow(st, k);
+      ls.connect(g).connect(gIn); ls.start(when, offset); srcs.push(ls); lg.push(g);
+    });
+    return { src, srcs, lg, g: gOut, start: when };
   }
 
-  function stopVoice(v, when, st) {
+  function stopVoice(v, when, st, dur) {
     const now = ctx.currentTime;
     if (v.start > now + 0.005) { // not audible yet: cancel outright
-      try { v.src.stop(); } catch {}
+      for (const x of v.srcs || [v.src]) { try { x.stop(); } catch {} }
       return now;
     }
-    const d = st ? fadeOut(st) : 4;
+    const d = dur ?? (st ? fadeOut(st) : 4);
     const p = v.g.gain;
     p.setValueAtTime(1, when);
     p.linearRampToValueAtTime(0, when + d);
-    v.src.stop(when + d + 0.05);
+    for (const x of v.srcs || [v.src]) x.stop(when + d + 0.05);
     return when + d;
   }
 
@@ -408,8 +431,68 @@
     }
   }
 
+  // ---------------- The finale: the gong is the end-of-show signal ----------------
+  // The server flags state.finale when the gong is started (by enough phones, the engine row, or HTTP). Here: three strikes on bar lines,
+  // while every other stem fades out in stages (the reverse of how a piece is built: colour and nature first, melody, rhythm, bass, pads,
+  // the drone last, the drone leaving as the third strike rings). The strikes are separate voices, so they overlap and ring into each other.
+  let finale = null, finaleDone = false;
+  const FINALE_GAPS = [3, 5], FINALE_SEMIS = [0, -2, -5], FINALE_LEVELS = [0.7, 0.85, 1], FINALE_FADE = 9, FINALE_PAUSE = 5;
+  /* A dark, long hall for the gong only: noise with an exponential tail (about 8 s to fade 60 dB) whose highs die away with time. */
+  function darkIR(sec = 9) {
+    const sr = ctx.sampleRate, n = Math.round(sec * sr), buf = ctx.createBuffer(2, n, sr), pre = Math.round(0.03 * sr);
+    for (let ch = 0; ch < 2; ch++) {
+      const d = buf.getChannelData(ch); let y = 0;
+      for (let i = pre; i < n; i++) { const t = (i - pre) / sr, a = 0.03 + 0.4 * Math.exp(-t / 0.8); y += a * ((Math.random() * 2 - 1) - y); d[i] = y * Math.exp(-0.863 * t); }
+    }
+    return buf;
+  }
+  function startFinale() {
+    if (finale || !started || !ctx) return;
+    const bl = barLen(), tBreath = nextBoundary(bl), t = tBreath + bl, voices = [], extra = [];
+    const gong = [...stems.values()].find((s) => s.def.finale && s.buffer);
+    const g0 = master.gain.value;
+    /* a breath: the whole mix dips for the bar before the first strike, and the gong lands into that space */
+    master.gain.setTargetAtTime(g0 * 0.6, tBreath, 0.4); master.gain.setTargetAtTime(g0, t - 0.08, 0.12);
+    let tStrike3 = t;
+    if (gong) {
+      const conv = ctx.createConvolver(); conv.buffer = darkIR(); const send = ctx.createGain(), ret = ctx.createGain(); send.gain.value = 0.55; ret.gain.value = 0.7;
+      send.connect(conv); conv.connect(ret); ret.connect(master); extra.push(send, conv, ret);
+      const times = [t, t + FINALE_GAPS[0] * bl, t + (FINALE_GAPS[0] + FINALE_GAPS[1]) * bl];
+      times.forEach((w, k) => voices.push(startVoice(gong, w, { rate: Math.pow(2, FINALE_SEMIS[k] / 12), level: FINALE_LEVELS[k], send, darken: true })));
+      tStrike3 = times[2];
+      gong.voice = voices[0]; voices[0].end = voices[2].end; /* shown as sounding until the last strike has rung out */
+      /* a low sine boom under the last strike: the tonic two octaves down (as low as the Drone) with its octave, swelling in with the strike */
+      const root = (ResonanceSynth.KEY_ROOTS[key] ?? 50), low = root - 24 >= 24 ? root - 24 : root - 12, f = 440 * Math.pow(2, (low - 69) / 12);
+      const bg = ctx.createGain(); bg.gain.setValueAtTime(0, tStrike3 - 0.1); bg.gain.linearRampToValueAtTime(1, tStrike3 + 2); bg.gain.setTargetAtTime(0, tStrike3 + 3, 5);
+      for (const [mul, lv] of [[1, 0.28], [2, 0.12]]) { const o = ctx.createOscillator(); o.type = 'sine'; o.frequency.value = f * mul; const og = ctx.createGain(); og.gain.value = lv; o.connect(og).connect(bg); o.start(tStrike3 - 0.1); o.stop(tStrike3 + 32); extra.push(o); }
+      bg.connect(gong.bus); extra.push(bg);
+    }
+    let last = voices.length ? voices[2].end : t;
+    const stageBars = (FINALE_GAPS[0] + FINALE_GAPS[1]) / 5; /* the Drone starts to leave as the third strike sounds */
+    for (const st of stems.values()) {
+      if (st === gong || !st.voice || !st.buffer) continue;
+      const at = t + exitRank(st) * stageBars * bl, dur = /drone/i.test(st.def.name || '') ? FINALE_FADE * 1.6 : FINALE_FADE;
+      st.stopUntil = stopVoice(st.voice, at, st, dur); st.voice = null; last = Math.max(last, st.stopUntil);
+    }
+    finale = { t, voices, extra, g0, end: last };
+    finaleDone = false; toast('finale', 'ok', 'The gong sounds: the show is ending');
+    $('#songName').hidden = true;
+    const wait = Math.max(0, (last + FINALE_PAUSE - ctx.currentTime) * 1000); /* then a few seconds of silence before the end is shown */
+    finale.timer = setTimeout(() => { finaleDone = true; for (const st of stems.values()) st.voice = null; const el = $('#songName'); el.textContent = 'The end'; el.hidden = false; toast('finale', 'ok', 'End of show. “Restart run counter” or “Stop all” begins a new one'); renderRows(); }, wait);
+  }
+  function cancelFinale() {
+    if (!finale) { finaleDone = false; return; }
+    clearTimeout(finale.timer);
+    try { master.gain.cancelScheduledValues(ctx.currentTime); master.gain.setTargetAtTime(finale.g0, ctx.currentTime, 0.1); } catch {}
+    for (const n of finale.extra || []) { try { if (n.stop) n.stop(); n.disconnect(); } catch {} }
+    for (const st of stems.values()) if (st.def.finale) st.voice = null;
+    for (const v of finale.voices) { try { stopVoice(v, ctx.currentTime + 0.05, null, 0.4); } catch {} }
+    finale = null; finaleDone = false; showSong();
+  }
+
   function stopAllNow() {
     if (!ctx) return;
+    cancelFinale();
     for (const st of stems.values()) if (st.voice) { st.stopUntil = stopVoice(st.voice, ctx.currentTime + LEAD, st); st.voice = null; }
   }
 
@@ -432,15 +515,15 @@
     try { results = await loadAll(newTempo); }
     catch (err) { progressHook = null; toast('regen', 'err', `${what} failed: ${err.message}`); btnState(bar, orig, 'err'); $('#regen').disabled = false; $('#applyBpm').disabled = false; $('#key').disabled = false; return false; }
     progressHook = null;
-    const when = nextBoundary(barLen()); /* bar boundary on the current grid */
     const retime = newTempo !== cfg.tempo;
+    const when = retime && !anyVoice() ? ctx.currentTime + 0.05 : nextBoundary(barLen()); /* bar boundary on the current grid, or right now when a tempo change finds nothing playing */
     if (retime) { t0 = when; cfg.tempo = newTempo; tempoOverride = newTempo; lastBeat = -1; if (runStart !== null) runStart = when; }
     let swapped = 0;
     for (const [id, buf] of results) {
       const st = stems.get(id);
       if (!buf) continue;
-      if (st.voice) { stopVoice(st.voice, when, st); st.buffer = buf; st.voice = startVoice(st, when); swapped++; }
-      else st.buffer = buf;
+      if (st.voice) { stopVoice(st.voice, when, st); setBuf(st, buf); st.voice = startVoice(st, when); swapped++; }
+      else setBuf(st, buf);
     }
     if (retime) { $('#tempo').textContent = `${cfg.tempo} BPM · ${cfg.beatsPerBar}/4`; }
     send({ type: 'reseed', seed, key });
@@ -452,7 +535,8 @@
     btnState(bar, '✓ Applied', 'ok');
     return true;
   }
-  function setBuffers(results) { for (const [id, buf] of results) if (buf) stems.get(id).buffer = buf; }
+  function setBuf(st, buf) { st.buffer = buf; st.layers = buf.layers || []; } /* a rendered stem with complexity carries its two extra layers on the buffer */
+  function setBuffers(results) { for (const [id, buf] of results) if (buf) setBuf(stems.get(id), buf); }
 
   // ---------------- Clock loop: UI + reporting ----------------
   let lastBeat = -1;
@@ -480,7 +564,7 @@
       let first = Infinity;
       for (const st of stems.values()) if (st.voice) first = Math.min(first, st.voice.start);
       if (isFinite(first)) { runStart = first; runEnded = false; }
-    } else if (!runEnded && runs > 0) {
+    } else if (!runEnded && runs > 0 && !finale && !finaleDone) {
       let fo = 0; for (const st of stems.values()) if (st.voice) fo = Math.max(fo, fadeOut(st));
       if (now >= runStart + runs * cycleSec() - fo - exitSpan() - beatLen()) { runEnded = true; send({ type: 'stopAll' }); }
     }
@@ -508,14 +592,14 @@
       b.addEventListener('click', () => send({ type: 'toggle', stem: Number(b.dataset.id) })));
     $('#stems').querySelectorAll('.stemrow').forEach((row) => {
       const id = Number(row.dataset.id), def = cfg.stems.find((s) => s.id === id);
-      const mini = ResonanceXY.miniButton(xyState[id]);
+      const mini = ResonanceXY.miniButton(xyState[id], !!def.complexity);
       mini.addEventListener('click', () => sheet.open(def, xyState[id] || ResonanceXY.XY_DEFAULT, desired.has(id)));
       row.appendChild(mini);
     });
     if (!sheet) sheet = ResonanceXY.createSheet({
       send,
       onToggle: (id) => send({ type: 'toggle', stem: id }),
-      onLocal: (id, x, y) => { xyState[id] = { x, y }; applyXY(id); const m = document.querySelector(`.stemrow[data-id="${id}"] .xy-mini`); if (m) m.setXY(xyState[id]); },
+      onLocal: (id, p) => { xyState[id] = { ...p }; applyXY(id); const m = document.querySelector(`.stemrow[data-id="${id}"] .xy-mini`); if (m) m.setXY(xyState[id]); },
     });
     renderRows();
   }
@@ -527,7 +611,7 @@
       const want = desired.has(id);
       const sounding = st && ((st.voice && st.voice.start <= now) || st.stopUntil > now);
       const pl = playsState[id];
-      const label = want ? (sounding ? 'playing' : 'starting') : (sounding ? 'stopping' : (pl ? (pl.used >= pl.max ? 'spent' : `${pl.max - pl.used} left`) : ''));
+      const label = st && st.def.finale && (finale || finaleDone) ? (finaleDone ? 'done' : 'finale') : want ? (sounding ? 'playing' : 'starting') : (sounding ? 'stopping' : (pl ? (pl.used >= pl.max ? 'spent' : `${pl.max - pl.used} left`) : ''));
       b.dataset.state = label || 'off';
       b.querySelector('.st').textContent = label;
     });
@@ -624,6 +708,7 @@
       `<br>Concert: ${esc(chain)}` + (i.tempo ? `<br>The file says ♩ = ${Math.round(i.tempo)}; the engine BPM is unchanged.` : '') +
       c.warnings.map((w) => `<br><span class="warn">${esc(w)}</span>`).join('');
   }
+  function showSong() { const el = $('#songName'), t = custom ? (custom.title || xmlName.replace(/\.(musicxml|mxl|xml)$/i, '')) : ''; el.textContent = finaleDone ? 'The end' : t; el.hidden = !(started && (t || finaleDone)) || !!(finale && !finaleDone); } // the song being played, on the main screen
   async function applyChart(buf, name) {
     const mine = ++xmlSeq;
     toast('xml', 'work', `Reading ${name}…`);
@@ -637,7 +722,7 @@
     const label = `Chord chart ${chart.title || name}`;
     if (!started) { toast('xml', 'ok', `✓ ${name} loaded: ${chart.bars} bars. It will be used when the engine starts`); }
     else if (!(await regenerate(cfg.tempo, label, false))) { custom = prev.custom; key = prev.key; xmlName = prev.name; $('#key').value = key; toast('xml', 'err', `${name} could not be applied`); return false; }
-    $('#xmlInfo').innerHTML = xmlInfoText(chart); $('#xmlReset').disabled = false; updateRunInfo();
+    $('#xmlInfo').innerHTML = xmlInfoText(chart); updateRunInfo(); showSong(); syncChartButtons();
     toast('xml', 'ok', `✓ ${name}: ${chart.bars} bars, ${chart.chords.length} chords, key ${key}`);
     return true;
   }
@@ -648,10 +733,14 @@
     const buf = await f.arrayBuffer(); xmlBuf = buf; await applyChart(buf, f.name);
   });
   for (const id of ['#xmlRead', '#xmlGrain']) $(id).addEventListener('change', () => { if (xmlBuf && custom) applyChart(xmlBuf, xmlName); });
+  /* the button of the source in use is lit: "Built-in progression" while the built-in one is in use (also before the engine starts, where it suggests loading a file), "Choose file…" while a chart is loaded */
+  const syncChartButtons = () => { $('#xmlReset').classList.toggle('lit', !custom); $('#xmlPick').classList.toggle('lit', !!custom); };
+  setInterval(syncChartButtons, 300); syncChartButtons();
   $('#xmlReset').addEventListener('click', async () => {
+    if (!custom) { toast('xml', 'ok', 'Already using the built-in progression. “Choose file…” loads a chord chart'); return; }
     const prev = { custom, key, name: xmlName }; custom = null; xmlBuf = null; key = (cfg && cfg.key) || 'D'; $('#key').value = key;
     if (started && !(await regenerate(cfg.tempo, 'Built-in progression', false))) { custom = prev.custom; key = prev.key; $('#key').value = key; return; }
-    $('#xmlInfo').textContent = 'Using the built-in progression.'; $('#xmlReset').disabled = true; xmlName = ''; updateRunInfo();
+    $('#xmlInfo').textContent = 'Using the built-in progression.'; xmlName = ''; updateRunInfo(); showSong(); syncChartButtons();
     if (!started) toast('xml', 'ok', '✓ Built-in progression will be used');
   });
   function updateChords(pos) {
@@ -807,7 +896,7 @@
   $('#packs').addEventListener('pointerdown', (e) => { if (e.target === $('#packs')) closePacks(); });
   addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$('#packs').hidden) closePacks(); });
   $('#startBtn').addEventListener('click', async () => { $('#startBtn').disabled = true; await start(); });
-  $('#quantize').addEventListener('change', (e) => { quantize = e.target.value; toast('quant', 'ok', `✓ Quantize: ${e.target.selectedOptions[0].textContent}. Taps now land on the next ${quantize === 'bar' ? 'bar line' : quantize === 'half' ? 'half bar' : 'beat'}`); });
+  $('#quantize').addEventListener('change', (e) => { quantize = e.target.value; reportQuantize(); toast('quant', 'ok', `✓ Quantize: ${e.target.selectedOptions[0].textContent}. Taps now land on the next ${quantize === 'bar' ? 'bar line' : quantize === 'half' ? 'half bar' : 'beat'}`); });
   const showFade = () => { $('#fadeInVal').textContent = Number($('#fadeIn').value).toFixed(1) + ' s'; $('#fadeOutVal').textContent = Number($('#fadeOut').value).toFixed(1) + ' s'; };
   $('#fadeIn').addEventListener('input', (e) => { fadeInSec = Number(e.target.value); showFade(); });
   $('#fadeOut').addEventListener('input', (e) => { fadeOutSec = Number(e.target.value); showFade(); });
@@ -821,12 +910,20 @@
     for (const st of stems.values()) {
       if (!st.buffer || st.def.file) continue; n++;
       const a = document.createElement('a');
-      a.href = URL.createObjectURL(ResonanceSynth.toWav(st.buffer));
+      a.href = URL.createObjectURL(ResonanceSynth.toWav(fullMix(st)));
       a.download = `${String(st.def.id).padStart(2, '0')}_${st.def.name.toLowerCase()}_${cfg.tempo}bpm_${key}_${st.def.bars}bars.wav`;
       a.click();
     }
     toast('exp', n ? 'ok' : 'err', n ? `✓ Exported ${n} WAV loop${n > 1 ? 's' : ''} (check your Downloads folder)` : 'Nothing to export: no generated stems loaded'); btnState($('#export'), n ? '✓ Exported' : 'Nothing to export', n ? 'ok' : 'err');
   });
+
+  /* the exported loop of a stem with complexity layers is the full mix: base plus both layers at full */
+  function fullMix(st) {
+    if (!st.layers || !st.layers.length) return st.buffer;
+    const out = new AudioBuffer({ length: st.buffer.length, numberOfChannels: 2, sampleRate: st.buffer.sampleRate });
+    for (let ch = 0; ch < 2; ch++) { const d = out.getChannelData(ch); for (const b of [st.buffer, ...st.layers]) { const a = b.getChannelData(ch); for (let i = 0; i < d.length; i++) d[i] += a[i]; } }
+    return out;
+  }
 
   // Expose a tiny debug surface (used by automated tests).
   window.__engine = { get ctx() { return ctx; }, get t0() { return t0; }, stems, beatLen, barLen, nextBoundary, get cfg() { return cfg; } };

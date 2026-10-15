@@ -8,7 +8,7 @@ RESONANCE is the proof of concept (PoC) for a cybernetic, biofeedback-ready live
 
 ## What it does
 
-- **The audience plays.** Each phone shows one button per layer. Tap to switch a layer on or off, drag on a button to change its filter and volume.
+- **The audience plays.** Each phone shows one button per layer. Tap a button to open that layer's pad (complexity and filter) and volume fader, with the on/off button and a × inside, so people play with one instrument instead of tapping every sound once.
 - **It always sounds musical.** Layers enter on the beat, phase-aligned to a master clock, with long fades. All generated layers follow one chord progression (Dm9, B♭maj7♯11, Fmaj9, C6/9) and a priority-based harmony plan, so layers do not clash.
 - **The performer stays in control.** The engine page has the tempo, key, fades, progression runs, a master volume and a Stop all that brings the instruments out in order. Audience rules (cooldowns, limits, a three-person vote for the gong) stop the room from wrecking the piece.
 - **No outside services.** No cloud, no LLM, no accounts. The music is generated in the browser with the Web Audio API, plus a few CC0 field recordings.
@@ -40,16 +40,18 @@ npm start              # server on http://localhost:8080
 1. Open **http://localhost:8080/engine** and send this computer's audio output to the PA.
 2. Click **Start engine**. It renders the stems, then everything starts silent.
 3. Open the **☰ menu** to show the QR code and join link for the audience.
-4. Shape the performance from the sidebar: BPM (the tempo glides to the new value), progression runs (Endless, or 1 to 64 runs, then an automatic fade-out), quantize, key, fades, brightness and master volume. Toggle stems yourself by clicking them; the engine page is not limited by audience rules.
+4. Shape the performance from the sidebar: BPM (while music is playing the tempo glides to the new value, 3 BPM per bar; with nothing playing it jumps straight to it and takes effect at once), progression runs (Endless, or 1 to 64 runs, then an automatic fade-out), quantize, key, fades, brightness and master volume. Toggle stems yourself by clicking them; the engine page is not limited by audience rules.
 5. **Chord display for** switches the on-screen chords between concert pitch and **B♭ instruments** (trumpet, clarinet, tenor sax), which read two semitones higher: Dm9 · B♭maj7♯11 · Fmaj9 · C6/9 shows as Em9 · Cmaj7♯11 · Gmaj9 · D6/9. Only the display changes, never the audio, and the choice is remembered in the browser.
 5. **New variation** re-seeds the melodies, bells, arp, bass and rhythm details. **Stop all** fades the layers out in order, colour first and drone last.
 
 **The audience (on their phones)**
 
 1. Scan the QR code, or open the LAN address shown on the engine page (use `http://`, not `https://`).
-2. Tap a button to bring a layer in or out. It lands on the next beat.
-3. Drag on a button to change that layer's filter (left/right) and volume (up/down).
-4. Some layers are shared on purpose: nature sounds need two people at once, and the **Gong** is the climax, which needs three people within 20 seconds and can strike only three times per performance.
+2. Tap a button to open that layer's pad: complexity (left/right) and filter (up/down), plus a volume fader at the side.
+3. Use the On/Off button inside to bring the layer in or out (it lands on the next beat), and the × to close.
+4. Some layers are shared on purpose: nature sounds need two people at once, and the **Gong** is the end of the show: three people within 20 seconds sound it three times while all the music fades out.
+
+**Only one engine tab.** Opening the engine page (in any browser) only connects it in standby: a running engine keeps playing. The page that **presses Start** becomes the engine, and any other engine page that was playing goes idle ("Another engine tab took over") and stops its sound. If the buttons stop responding, check that nothing else started as the engine.
 
 Full details are below: rules, harmony, joining from an iPhone, and the inputs for biosensors.
 
@@ -122,21 +124,32 @@ See [DEPLOY.md](DEPLOY.md) for Railway (CLI) or Render (free, via GitHub). Verce
 
 **Button states:** *starting* / *stopping* (pulsing) means the change is queued for the next beat. *playing* means the engine reports the stem is sounding.
 
-## Per-sample XY controller (volume + filter)
+## Per-layer controller (complexity + cutoff + volume)
 
-Every sample has an XY controller. On phones it's built into each button:
+Every layer has a pad and a volume fader, in the style of GarageBand's Smart Instruments. On phones **tapping a button opens that layer's sheet**: the pad, the volume fader, an **On/Off** button (the layer comes in on the next beat; a pending vote shows as "1/2 joined") and a **×** to close. The aim is to get people to play with one instrument instead of tapping every sound once. Dragging on the button itself does nothing, so a swipe can never change the music by accident. The sheet has a big **ON/OFF switch** (it turns the layer's colour when on) and a **?** button beside it. The switch answers a tap at once and a line under the title says what is happening: "Starting: waiting for the next bar…" (it says beat, half bar or bar, following the engine's Quantize setting), "Fading out…", "1/2 joined. Waiting for the others…", "Waiting for the show to start…" before the engine is running, then "Playing". If the server refuses a tap (a cooldown, say) the switch flips back and the reason appears. The **first time anyone opens a pad on a phone**, a card with the plain-language explanation sits on top of the pad; the **×** or **Got it** crosses it off, and the **?** brings it back any time. The card has three parts: **the sound** (what it is), **play with it** (what dragging does) and **joining in** (the voting and limits that apply: how many people must press together, how many sounds of the group can play at once, the cooldown, whether it fades away by itself). Add `?help=1` to the phone address to see the card every time (handy when testing); the "seen" flag is kept in the browser. The sound descriptions are built in for every generated synth, and a stem can set its own with an `about` line in pack.json; the joining-in text is written from the group's rules. Layers that need a group vote (any group with a `gate`: the nature samples and the gong) have **no pad, no switch and no ?**: their sheet is the explanation (the sound, the vote and, for the nature samples, the volume), a big **Vote** button that shows the vote count ("1/2 joined") and becomes **Stop** once the sound is playing, and the **volume bar** for the nature samples. The gong has no volume bar, and its button reads Struck after the vote succeeds. So the end-of-show vote is two taps and can't happen by accident.
 
-- **Tap** a button to switch the sample on or off (on the next beat).
-- **Drag** on a button to change filter (↔) and volume (↕). The crosshair and dot show the current position, and the label shows dB and Hz while you drag. The drag is relative, so touching the button never makes the value jump.
-- **Hold** a button (about ½ s) to open a big XY pad for finer control.
+On the engine page nothing changes: the stem rows still toggle on a click, and the small square next to each layer opens the same sheet (with a Done button instead of the ×).
 
-On the engine page, the small square next to each sample opens the same big pad.
+- **Pad, X (left → right): complexity.** From a sparse part to a dense one. This exists only for the generated **melodic and rhythmic** layers (Arp, Bells, Shimmer, both melodies, Pulse, Sub). The core synth, the nature samples and the gong have no complexity: their pad moves up and down only.
+- **Pad, Y (bottom → top): filter cutoff**, 60 Hz → 20 kHz on a log scale, with a touch of resonance so a sweep sings. Top means the filter is open.
+- **Fader at the side: volume.** The default (0.8) is the layer's `gain` from config.json, the top is +3.9 dB and the bottom is silent.
+- **Double-tap** the pad (or the fader) to reset it. The default is complexity 60%, filter open, normal volume.
 
-- **X (left → right):** low-pass filter cutoff, 60 Hz → 20 kHz on a log scale. Fully right means the filter is open.
-- **Y (bottom → top):** volume. The default (0.8) is the sample's `gain` from config.json, the top is +3.9 dB and the bottom is silent.
-- **Double-tap** the pad to reset it (filter open, normal volume).
+How complexity works: the music is pre-rendered in loops, so complexity is built in at render time. Each melodic and rhythmic layer is rendered as **three same-length loops that play in sync**: a sparse base that is always on, and two layers that add notes. The pad's X fades layer 1 in from 15% to 45% and layer 2 from 50% to 90% (a smooth glide with no clicks; `layerGain` in public/xy.js). Because the layers only add notes, nothing cancels as you slide. What each layer adds:
 
-Positions are shared. When someone moves a pad, everyone's view of it updates, and anyone who connects later sees the current positions. The pad also works while a sample is off, so it enters with those settings. Sensors or scripts can send the same message: `{"type":"xy","stem":3,"x":0.4,"y":0.7}` over the WebSocket or `POST /api/input`.
+| Layer | Base (sparse) | + layer 1 | + layer 2 |
+|---|---|---|---|
+| Arp | a note every 2 beats | the beats in between and the off-beat eighths (the old pattern, with its gaps) | quiet sixteenth-note fills, sometimes an octave up |
+| Bells | the first bell of each chord | the other bells (1 to 3 per chord, as before) | three more, softer bells |
+| Shimmer | one chord tone | a second chord tone | the third tone and the first an octave up |
+| Melody A, B (long leads) | the long notes | a second, shorter line an octave up that keeps a semitone away from the long notes | a quiet plucked ornament line |
+| Other melodies (lyrical, flowing, ...) | strong beats and phrase ends | the other beats | the off-beats |
+| Pulse | the heartbeat's first thump | the second thump and the shaker's eighths | sixteenth shaker, pick-up, ghost thump |
+| Sub | one long note per chord | the leap or scoop of the chord | a soft pluck on every bar line |
+
+Rendering takes about twice as long as before, and the extra layers use about three times the memory of those layers. The exported WAV of such a layer is the full mix (base plus both layers).
+
+Positions are shared. When someone moves a pad, everyone's view of it updates, and anyone who connects later sees the current positions. The pad also works while a layer is off, so it enters with those settings. Sensors or scripts can send the same message: `{"type":"xy","stem":3,"x":0.4,"y":0.7,"v":0.8}` (x = complexity, y = cutoff, v = volume; leave out what you don't change) over the WebSocket or `POST /api/input`.
 
 ## Sample packs
 
@@ -225,7 +238,7 @@ All stems follow one progression, i – VI – III – VII (Dm9 · B♭maj7♯11
 5. **Tide**: filtered-noise "waves" + air
 6. **Pulse**: slow heartbeat (lub-dub on beats 1 & 3) + soft shaker, a nod to the biofeedback concept
 7. **Bells**: sparse FM bell melody
-8. **Shimmer**: high glassy pad
+8. **Shimmer**: an aggressive distorted-guitar voice: sustained chord tones on detuned saws and a square, through a pedal chain of a slight wah (a band-pass sweeping about every 3 s, mixed with the dry signal), heavy distortion, and a deep, fast 5.5 Hz tremolo, with a dotted-eighth echo
 
 Each loop is rendered in circular time: the reverb, delay and note tails past the loop end are folded back onto the start, so the loop point doesn't click or drop out. **New variation** re-rolls the random seed, and the **Key** menu changes the key. Both swap the new stems in on the next bar.
 
@@ -235,24 +248,24 @@ Each loop is rendered in circular time: the reverb, delay and note tails past th
 
 Packs can sort stems into groups with rules for remote participants. The `layers` pack has five:
 
-- **Core synth** (Drone, Pad, Atmos, Noise): the bed of the piece. At least one layer always stays on, 3 s cooldown per layer, a gentle XY range (the filter can't be closed all the way, volume can't go to zero), and slow 8 s fades. *Atmos* is a blend layer: two timbres (soft triangle/sine and a brighter saw) play the same chord tones while a slow LFO crossfades between them.
+- **Core synth** (Drone, Pad, Atmos, Noise): the bed of the piece. **Hidden from the phones**: there are no pads for it, and taps or XY from a phone are refused. Only the engine page (sidebar rows), `POST /api/input` and sensors control it. Slow 8 s fades. (Set `"hidden": false` in the group's `rules` to give it back to the audience.) *Atmos* is a blend layer: two timbres (soft triangle/sine and a brighter saw) play the same chord tones while a slow LFO crossfades between them.
 - **Melodic** (Arp, Bells, Shimmer, Melody A glide lead, Melody B acid line): up to 3 at once (the oldest is replaced), 4 s cooldown, XY range limited, 3 s in / 5 s out. The four plucked melody variations (lyrical, flowing, leaping, bright) are in the *Ambient + melody* pack.
 - **Rhythmic** (Pulse, Sub): up to 2 at once, 6 s cooldown, quick 1.5 s entrances so they land with the beat.
 - **Nature samples** (Stream, Rain, Garden): engagement-driven. It takes **two people tapping within 10 s** to bring one in (phones show "1/2 joined"), only one plays at once (starting another replaces it), and each one fades away after 60 s unless brought back.
-- **Gong, the climax** (Gong): the audience's shared decision that the moment has come (see *The Gong* below). It takes **three people tapping within 20 s**, each vote is **one strike**, and it sounds **only three times** in a performance.
+- **Gong, the end of the show** (Gong): the audience's shared decision that the show is over (see *The Gong* below). It takes **three people tapping within 20 s**; the gong then sounds **three times** while every other layer fades out in stages.
 
 ### The Gong: the climax
 
 **Intent.** Everything else in RESONANCE is something the audience adds to, shapes or lets fade. The gong is different: it is the one moment the audience decides *together*. It is a deliberate climax, sounded when the audience feels the current setting or performance has reached its natural height (they are satisfied), or has run its course (they are tired of it). It marks a turning point, so it has to be rare, shared and unmistakable. That is why it is built the way it is:
 
 - **A three-person vote.** One person can't sound it. Three different phones must tap within 20 seconds; phones show "1/3 joined" while the vote builds, and the same phone tapping twice counts once. If the third tap doesn't come in time, the vote lapses.
-- **One strike per vote.** The vote produces a single strike of the gong, played once from its start (not looped), landing on the next bar line so it sits in the music. Its attack is instant and its tail rings for four bars. Nobody can cut it short or shape it: the XY pad is locked and further taps are refused while it rings.
-- **Only three times.** The gong can sound three times in one performance, no more. Phones show how many are left ("3 left", "2 left", "1 left") and then "spent"; a fourth vote is refused with "Gong has sounded 3 times. That's all for this performance". The scarcity is what gives each strike its weight, and the third is the last word.
-- **A new performance brings it back.** The three strikes reset when you click **Start engine**, **Restart run count**, or switch to a different pack (or restart the server). The engine operator can still sound the gong from the engine page at any time; that doesn't use up the audience's strikes.
+- **The finale.** A successful vote (or one click on the Gong row of the engine page, or `POST /api/input {"type":"toggle","stem":<gong id>}`) ends the show, and it is built to sound solemn and final. The whole mix first dips about 4 dB for one bar (a breath), then the gong strikes three times on bar lines, with widening gaps (3 bars, then 5): each strike is lower than the last (0, −2 and −5 semitones) and louder (70%, 85%, 100%), is its own voice so they ring into each other, and loses its highs as it dies away. The gong has its own long, dark hall reverb, and under the third strike a low sine boom swells in: the key's tonic as low as the Drone, plus its octave. Meanwhile every other stem fades out over 9 s, one stage every 1.5 bars (nature, bells and shimmer first, then melodies and arp, rhythm, Sub, Pad and Atmos, the Drone last with a 14 s fade, leaving as the third strike sounds). After a further 5 s of silence the engine shows “The end”. The numbers are `FINALE_*` in `public/engine.js`.
+- **Nothing else can start afterwards.** Once the finale is under way phones dim and show “The gong has sounded · thank you”; taps and engine/HTTP toggles are ignored. A new show (**Restart run count**, **Stop all**, Start engine or a pack switch) brings everything back.
+- **Changing it.** Set `"finale": false` in a group's `rules` to make the gong an ordinary one-shot again (with `maxPlays` if you want a limit), or set `gate` to `null` so a single tap ends the show.
 
 What the performer does with it is up to them: let the first strike mark a peak, treat it as a signal to change the setting (new variation, new BPM, strip back to the Drone), and hold the third in reserve as a closing gesture.
 
-The numbers (people, window, strikes, cooldown) live in the `climax` preset in `lib/rules.js` and can be overridden per pack in `rules` (see packs/README.md). The gong sample file holds one strike (bars 1 to 4) repeated in bars 5 to 8; the stem's `"playBars": 4` plays just one strike.
+The numbers (people, window, strikes, cooldown) live in the `climax` preset in `lib/rules.js` and can be overridden per pack in `rules` (see packs/README.md). The gong sample file holds one strike (bars 1 to 4) repeated in bars 5 to 8; the engine plays only the first strike, and measures that window at the pack's own tempo (50 BPM = 19.2 s), so it stays one strike at any BPM you choose; the stem's `"playBars": 4` plays just one strike.
 
 Rules apply to audience phones only; the engine page, sensors and `POST /api/input` bypass them. When a phone is refused, it sees a short message ("Wait 2s", "Core synth: at least 1 must stay on"). The rules are plain data in each pack's `pack.json` (see packs/README.md), so changing them needs no code.
 
@@ -272,7 +285,7 @@ If the phone can't connect:
 
 ## BPM, runs and play time
 
-The default tempo is **50 BPM** (`config.json` and every pack's `pack.json`). In the engine sidebar, from the top: the chord chart picker and chord display, then Quantize and Key, then BPM, then the runs and Lush switches, then the stems, and last the fade in, fade out, brightness and master volume. The **BPM** slider (40 to 160) shows the new value and play time while you drag; when you let go, the generated stems are re-rendered at that tempo and swapped in together on the next bar. Every control reports its progress in a message at the bottom of the screen (rendering, waiting for the bar, done, or an error). **Progression runs** sets how many times the 8-bar chord progression plays before everything fades out on its own (choices: 1, 8, 16, 32, 64 or Endless). The line underneath estimates the play time: bars per run, time per run, total, and while playing, the current run and time left.
+The default tempo is **50 BPM** (`config.json` and every pack's `pack.json`). In the engine sidebar, from the top: the chord chart picker and chord display, then Quantize and Key, then BPM, then the runs and Lush switches, then the stems, and last the fade in, fade out, brightness and master volume. The **BPM** slider (40 to 120) shows the new value and play time while you drag; when you let go, the generated stems are re-rendered at that tempo and swapped in together on the next bar. Every control reports its progress in a message at the bottom of the screen (rendering, waiting for the bar, done, or an error). **Progression runs** sets how many times the 8-bar chord progression plays before everything fades out on its own (choices: 1, 8, 16, 32, 64 or Endless). The line underneath estimates the play time: bars per run, time per run, total, and while playing, the current run and time left.
 
 The run counter starts when the first stem starts. **Restart run count** begins counting again from now. Recorded sample loops (stream, rain and so on) keep their own length and do not change with BPM; picking a different pack goes back to that pack's tempo.
 
@@ -333,7 +346,7 @@ public/engine.html audio engine UI (open on the PA machine)
 public/engine.js   clock, scheduling, voices, visual
 public/synth.js    procedural ambient stem generator + WAV export
 public/client.html audience controller
-public/xy.js       per-sample XY pad (volume + low-pass), shared by both pages
+public/xy.js       the pad (complexity + cutoff) and volume fader sheet, shared by both pages
 packs/             sample packs (one folder each; see packs/README.md)
 ```
 

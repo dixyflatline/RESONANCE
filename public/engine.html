@@ -65,6 +65,8 @@
   main { position:relative; }
   #chordPanel { position:absolute; top:16px; left:50%; transform:translateX(-50%); z-index:5; width:min(760px,94%); display:flex; flex-direction:column; align-items:center; gap:10px; pointer-events:none; }
   #chordPanel[hidden] { display:none; }
+  #songName { position:absolute; left:50%; bottom:28px; transform:translateX(-50%); z-index:5; max-width:92%; text-align:center; font-size:clamp(20px,3.2vw,44px); font-weight:300; letter-spacing:.06em; color:var(--text); opacity:.85; text-shadow:0 2px 24px rgba(0,0,0,.7); pointer-events:none; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  #songName[hidden] { display:none; }
   #chordNow { display:flex; align-items:baseline; gap:12px; }
   #cName { font-size:44px; font-weight:700; letter-spacing:.01em; line-height:1; }
   #cRoman { font-size:20px; color:var(--accent); font-weight:600; } #cBar { font-size:12px; color:var(--muted); }
@@ -106,6 +108,7 @@
   .toast.work { border-color:#7a6a2f; background:#26210f; color:#ffeaa8; } .toast.work i { background:#f0c24a; box-shadow:0 0 8px #f0c24a; animation:blink .5s infinite alternate; }
   .toast.err { border-color:#7a2f2f; background:#2a1416; color:#ffd2ca; } .toast.err i { background:#ef5a4a; box-shadow:0 0 8px #ef5a4a; }
   button.busy { border-color:#7a6a2f; background:#26210f; color:#ffeaa8; cursor:progress; } button.done { border-color:#2e6b4b; background:#10241b; color:#d4f5e2; }
+  #xmlBox button.lit { border-color:var(--accent); background:rgba(127,179,255,.16); color:#fff; box-shadow:0 0 0 1px var(--accent) inset, 0 0 12px rgba(127,179,255,.35); }
   select:disabled, button:disabled { opacity:.6; }
   #dock { position:sticky; bottom:-18px; margin:0 -18px -18px; padding:12px 18px; background:var(--panel); border-top:1px solid var(--line); display:grid; grid-template-columns:1.4fr 1fr; gap:8px; z-index:3; box-shadow:0 -10px 18px rgba(0,0,0,.35); }
   #dock #regen { background:#27406e; border-color:#3d5f9c; font-weight:600; }
@@ -143,7 +146,7 @@
   <div class="row"><span id="pos">–.–</span><span id="tempo" class="label"></span></div>
   <div id="xmlBox">
     <span class="label">Chord chart (MusicXML)</span>
-    <div class="grid2"><button id="xmlPick" type="button" title="Pick a .musicxml, .xml or .mxl file with chord symbols from this computer or a synced drive folder">Choose file…</button><button id="xmlReset" type="button" disabled title="Go back to the built-in progression">Built-in progression</button></div>
+    <div class="grid2"><button id="xmlPick" type="button" title="Pick a .musicxml, .xml or .mxl file with chord symbols from this computer or a synced drive folder">Choose file…</button><button id="xmlReset" type="button" title="Go back to the built-in progression">Built-in progression</button></div>
     <input id="xmlFile" type="file" accept=".musicxml,.xml,.mxl" hidden>
     <div class="grid2">
       <label><span class="label">File symbols are</span><select id="xmlRead"><option value="auto">Auto (follow the file)</option><option value="bb">Written for B♭ (−2)</option><option value="concert">Concert pitch</option></select></label>
@@ -158,7 +161,7 @@
       <select id="quantize"><option value="beat">Beat</option><option value="half">Half bar</option><option value="bar">Bar</option></select></label>
     <label><span class="label">Key</span><select id="key"></select></label>
   </div>
-  <div><span class="label">BPM now</span> <b id="bpmNow">50</b><span id="bpmTgt" class="label" hidden> → target <b id="bpmVal" style="color:var(--text)">50</b></span><span hidden><b id="bpmValHold"></b></span><div id="bpmRow"><button id="bpmDn" type="button" title="1 BPM slower (Shift: 5)">−</button><input id="bpm" type="range" min="40" max="160" step="1" value="50" title="Release to apply: the tempo glides to the new BPM in small steps"><button id="bpmUp" type="button" title="1 BPM faster (Shift: 5)">+</button></div></div>
+  <div><span class="label">BPM now</span> <b id="bpmNow">50</b><span id="bpmTgt" class="label" hidden> → target <b id="bpmVal" style="color:var(--text)">50</b></span><span hidden><b id="bpmValHold"></b></span><div id="bpmRow"><button id="bpmDn" type="button" title="1 BPM slower (Shift: 5)">−</button><input id="bpm" type="range" min="40" max="120" step="1" value="50" title="Release to apply: the tempo glides to the new BPM in small steps"><button id="bpmUp" type="button" title="1 BPM faster (Shift: 5)">+</button></div></div>
   <button id="applyBpm" hidden style="display:none" title="Re-renders the generated stems at the new BPM and swaps them in on the next bar">Apply BPM</button>
   <div class="grid2">
     <label><span class="label">Progression runs</span>
@@ -171,7 +174,7 @@
     <label style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="lushVerb" checked><span>Lush reverb</span></label>
   </div>
   <div>
-    <div class="label" style="margin-bottom:6px">Stems (click to toggle · small square = volume / filter XY)</div>
+    <div class="label" style="margin-bottom:6px">Stems (click to toggle · small square = complexity · cutoff · volume pad)</div>
     <div id="stems"></div>
   </div>
 
@@ -193,6 +196,7 @@
     <div id="chordNow"><span id="cName">–</span><span id="cRoman"></span><span id="cBar"></span></div>
     <div id="chordBars"></div>
   </div>
+  <div id="songName" hidden></div>
   <div id="gate">
     <h1>RESONANCE</h1>
     <p>This tab is Dantian 丹田, the audio engine. Route this computer's audio output to the PA, then start. Daqian 大千 (the audience's phones) join from the ☰ menu (QR code).</p>

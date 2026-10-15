@@ -20,6 +20,7 @@
   "stems": [
     {
       "name": "Stream",
+      "about": "A real recording of a flowing stream: gentle running water, like sitting beside a creek.",
       "role": "field · water",
       "file": "cc0_stream_16bars_50bpm.wav",
       "bars": 16,
@@ -29,6 +30,7 @@
     },
     {
       "name": "Rain",
+      "about": "A real recording of rain, with distant thunder rumbling now and then.",
       "role": "field · rain & thunder",
       "file": "cc0_rain_16bars_50bpm.wav",
       "bars": 16,
@@ -38,6 +40,7 @@
     },
     {
       "name": "Garden",
+      "about": "A real recording of a garden: birdsong and a light breeze.",
       "role": "field · birds & wind",
       "file": "cc0_garden_8bars_50bpm.wav",
       "bars": 8,
@@ -47,7 +50,8 @@
     },
     {
       "name": "Gong",
-      "role": "climax · three people, three strikes",
+      "about": "A big, deep gong from a real recording. Its ring is the signal that the show is ending.",
+      "role": "end of show · three people, three strikes",
       "file": "cc0_gong_8bars_50bpm.wav",
       "bars": 8,
       "gain": 0.55,
@@ -64,8 +68,8 @@
       "order": 4
     },
     "climax": {
-      "name": "Gong · the climax",
-      "description": "The audience's shared decision that the moment has come: they are satisfied with the current setting, or tired of it. It takes 3 people tapping together to sound it; each vote is one strike; and it sounds only 3 times in a performance. Use it sparingly.",
+      "name": "Gong · the end of the show",
+      "description": "The audience's shared decision that the moment has come: they are satisfied with the current setting, or tired of it. It takes 3 people tapping together to sound it. It is the end-of-show signal: the gong strikes 3 times while all the music fades out in stages.",
       "preset": "climax",
       "order": 5
     }

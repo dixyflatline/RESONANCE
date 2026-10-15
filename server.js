@@ -51,7 +51,8 @@ const state = {
   active: new Set(),   // stems the audience wants on (desired)
   playing: new Set(),  // stems the engine reports as actually sounding
   params: {},          // continuous params (future sensor mapping), e.g. { brightness: 0.8 }
-  xy: {},              // per-stem XY controller: { [id]: { x: cutoff 0..1, y: volume 0..1 } }
+  xy: {},              // per-stem controller: { [id]: { x: complexity 0..1, y: filter cutoff 0..1, v: volume 0..1 } }
+  finale: false,       // the end of the show has been signalled (the gong): 3 strikes, everything fades out; taps are ignored until a new show
 };
 // ---- Audience rules (per stem group; see lib/rules.js) --------------------
 // Only taps from audience phones are limited. The engine page, sensors and HTTP inputs bypass the rules.
@@ -60,7 +61,7 @@ const startedAt = new Map();    // stem id -> ms it was switched on (for replace
 const decayTimers = new Map();  // stem id -> timer that fades a participant-started stem away
 const pendingTaps = new Map();  // stem id -> Map(clientId -> ms): taps waiting for enough people (gate)
 const plays = new Map();        // stem id -> times participants have started it in this performance (rules.maxPlays, e.g. the gong)
-function resetShow() { plays.clear(); pendingTaps.clear(); } // a new performance: the gong's three strikes come back
+function resetShow() { plays.clear(); pendingTaps.clear(); state.finale = false; } // a new performance: the gong's three strikes come back
 function playsSnapshot() {
   const out = {};
   for (const st of active.stems) { const r = rulesOf(st.id); if (r && r.maxPlays) out[st.id] = { used: plays.get(st.id) || 0, max: r.maxPlays }; }
@@ -85,7 +86,13 @@ function switchOff(id, why) {
   startedAt.delete(id); clearTimeout(decayTimers.get(id)); decayTimers.delete(id);
   log(`stem ${id} off (${why})`);
 }
+function startFinale(id, why) { // the gong: the end-of-show signal. The engine plays the three strikes and fades everything else out in stages.
+  state.finale = true; state.active.clear(); pendingTaps.clear();
+  for (const t of decayTimers.values()) clearTimeout(t); decayTimers.clear();
+  log(`FINALE (${why}): gong x3, all stems fading out`);
+}
 function switchOn(id, byAudience) {
+  if (rulesOf(id) && rulesOf(id).finale) { startFinale(id, byAudience ? 'audience' : 'engine'); return; }
   const g = groupOf(id), gr = g && g.rules; // a group's maxActive holds for every source (engine sidebar, HTTP, phones): the oldest steps aside
   if (gr && gr.maxActive && gr.onFull !== 'ignore') for (const o of groupActive(g).filter((s) => s.id !== id).sort((x, y) => (startedAt.get(x.id) || 0) - (startedAt.get(y.id) || 0)).slice(0, Math.max(0, groupActive(g).filter((s) => s.id !== id).length - gr.maxActive + 1))) switchOff(o.id, 'replaced');
   state.active.add(id); startedAt.set(id, Date.now());
@@ -99,8 +106,9 @@ function deny(sender, id, reason) { if (sender) send(sender, { type: 'denied', s
 /** A participant taps a stem. Returns true when the stem list changed. */
 function audienceToggle(id, sender) {
   const r = rulesOf(id), g = groupOf(id), now = Date.now();
+  if (state.finale) { deny(sender, id, 'The show is ending'); return false; }
   if (!r) { state.active.has(id) ? switchOff(id, 'tap') : switchOn(id, true); return true; } // pack without groups: no rules
-  if (!r.toggle) { deny(sender, id, 'Not available to participants'); return false; }
+  if (r.hidden || !r.toggle) { deny(sender, id, 'Not available to participants'); return false; }
   const stemName = (active.stems.find((s) => s.id === id) || {}).name || 'It';
   if (r.oneShot && state.active.has(id)) { deny(sender, id, `${stemName} is sounding`); return false; } // a strike can't be cut short by participants
   if (r.maxPlays && (plays.get(id) || 0) >= r.maxPlays) { deny(sender, id, `${stemName} has sounded ${r.maxPlays} times. That's all for this performance`); return false; }
@@ -127,7 +135,7 @@ function audienceToggle(id, sender) {
   return true;
 }
 
-const XY_DEFAULT = { x: 1, y: 0.8 }; // filter fully open, volume at the stem's configured gain
+const XY_DEFAULT = { x: 0.6, y: 1, v: 0.8 }; // about the stem as it always sounded: complexity 60%, filter fully open, volume at the stem's configured gain
 let engineSocket = null;
 
 // ---- HTTP ----------------------------------------------------------------
@@ -215,7 +223,8 @@ function snapshot() {
   for (const ws of wss.clients) if (ws.role === 'client' && ws.readyState === 1) clients++;
   return {
     type: 'state',
-    active: [...state.active].sort((a, b) => a - b),
+    active: [...new Set([...state.active, ...(state.finale ? active.stems.filter((s) => s.finale).map((s) => s.id) : [])])].sort((a, b) => a - b), /* during the finale the gong counts as on */
+    finale: state.finale,
     playing: [...state.playing].sort((a, b) => a - b),
     params: state.params,
     xy: Object.fromEntries(active.stems.map((s) => [s.id, state.xy[s.id] || XY_DEFAULT])),
@@ -252,6 +261,7 @@ function handleInput(msg, source, sender) {
     case 'toggle': {
       const id = Number(msg.stem);
       if (!validStem(id)) return;
+      if (state.finale) return; // the show is ending: nothing can be started until a new show
       if (source === 'client') { if (!audienceToggle(id, sender)) { if (Object.keys(pendingSnapshot()).length) broadcastState(); return; } }
       else state.active.has(id) ? switchOff(id, source) : switchOn(id, false);
       break;
@@ -259,11 +269,12 @@ function handleInput(msg, source, sender) {
     case 'set': { // explicit on/off (idempotent; handy for sensor rules)
       const id = Number(msg.stem);
       if (!validStem(id)) return;
+      if (state.finale) return;
       msg.on ? (state.active.has(id) || switchOn(id, false)) : switchOff(id, source);
       break;
     }
     case 'stopAll':
-      state.active.clear(); clearTimers();
+      state.active.clear(); clearTimers(); state.finale = false;
       break;
     case 'newShow': // a new performance (engine start / restart run count): votes and the gong's strikes start again
       resetShow();
@@ -273,19 +284,20 @@ function handleInput(msg, source, sender) {
       if (typeof msg.name === 'string' && Number.isFinite(v)) state.params[msg.name] = v;
       break;
     }
-    case 'xy': { // per-stem XY controller (x = low-pass cutoff, y = volume), high-rate: no log, no full state
+    case 'xy': { // per-stem controller (x = complexity, y = filter cutoff, v = volume), high-rate: no log, no full state
       const id = Number(msg.stem);
       if (!validStem(id)) return;
       const clamp = (v, d) => (Number.isFinite(Number(v)) ? Math.max(0, Math.min(1, Number(v))) : d);
-      const cur = state.xy[id] || XY_DEFAULT;
-      let xy = { x: clamp(msg.x, cur.x), y: clamp(msg.y, cur.y) };
+      const cur = { ...XY_DEFAULT, ...(state.xy[id] || {}) };
+      const stem = active.stems.find((s) => s.id === id);
+      let xy = { x: stem && stem.complexity ? clamp(msg.x, cur.x) : cur.x, y: clamp(msg.y, cur.y), v: clamp(msg.v, cur.v) }; // no complexity layers: X stays put
       let limited = false;
       const r = source === 'client' ? rulesOf(id) : null;
       if (r) { // participants: locked pad or limited range for this group
-        if (!r.xy) return;
+        if (r.hidden || !r.xy) return;
         const lim = (v, [lo, hi]) => Math.max(lo, Math.min(hi, v));
-        const c = { x: lim(xy.x, r.xyRange.x), y: lim(xy.y, r.xyRange.y) };
-        limited = c.x !== xy.x || c.y !== xy.y; xy = c;
+        const c = { x: lim(xy.x, r.xyRange.x), y: lim(xy.y, r.xyRange.y), v: lim(xy.v, r.volRange) };
+        limited = c.x !== xy.x || c.y !== xy.y || c.v !== xy.v; xy = c;
       }
       state.xy[id] = xy;
       const out = JSON.stringify({ type: 'xy', stem: id, ...xy });
@@ -296,6 +308,19 @@ function handleInput(msg, source, sender) {
       return;
   }
   log(`${source} ${msg.type}${msg.stem != null ? ' ' + msg.stem : ''}${msg.name ? ' ' + msg.name + '=' + msg.value : ''} -> active [${[...state.active].join(',')}]`);
+  broadcastState();
+}
+
+// The one engine: a newly claiming engine page replaces the old one (which goes idle and stops its sound).
+function claimEngine(ws) {
+  if (engineSocket === ws) return;
+  if (engineSocket && engineSocket.readyState === 1) {
+    send(engineSocket, { type: 'replaced' });
+    engineSocket.close();
+  }
+  engineSocket = ws;
+  state.playing.clear();
+  log('engine connected');
   broadcastState();
 }
 
@@ -311,14 +336,11 @@ wss.on('connection', (ws, req) => {
     return ws.close(4001, 'engine key required');
   }
 
-  if (ws.role === 'engine') {
-    if (engineSocket && engineSocket.readyState === 1) {
-      send(engineSocket, { type: 'replaced' });
-      engineSocket.close();
-    }
-    engineSocket = ws;
-    state.playing.clear();
-    log('engine connected');
+  ws.standby = ws.role === 'engine' && url.searchParams.get('standby') === '1';
+  if (ws.role === 'engine' && ws.standby) {
+    log('engine page opened (standby: it becomes the engine when Start is pressed)'); // opening the page must not silence a running engine
+  } else if (ws.role === 'engine') {
+    claimEngine(ws);
   } else {
     log(`${ws.role} connected (${req.socket.remoteAddress})`);
   }
@@ -330,6 +352,8 @@ wss.on('connection', (ws, req) => {
     let msg;
     try { msg = JSON.parse(data); } catch { return; }
     if (ws.role === 'engine') {
+      if (msg.type === 'claim') { claimEngine(ws); return; } // Start was pressed on this page
+      if (ws !== engineSocket && (msg.type === 'playing' || msg.type === 'tick' || msg.type === 'reseed')) return; // a standby page is not the engine
       if (msg.type === 'playing') { state.playing = new Set(msg.playing.map(Number)); broadcastState(); }
       else if (msg.type === 'tick') broadcast(msg); // beat clock for client UIs
       else if (msg.type === 'reseed') { active.seed = msg.seed; active.key = msg.key || active.key; }

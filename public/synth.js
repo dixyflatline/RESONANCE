@@ -560,7 +560,7 @@
     const spanned = (a, b) => segs.filter((s) => s.t1 > a + 1e-6 && s.t0 < b - 1e-6);
     const cands = (a, b) => {
       const sp = spanned(a, b), out = [];
-      for (let n = cfg.lo; n <= cfg.hi; n++) if (sp.every((s, k) => (k === 0 ? isTone(n, s.chord) : consonant(n, s.chord)) && ok(n, s.i))) out.push(n);
+      for (let n = cfg.lo; n <= cfg.hi; n++) if (sp.every((s, k) => (k === 0 ? isTone(n, s.chord) : consonant(n, s.chord)) && ok(n, s.i)) && !(cfg.avoid && cfg.avoid(n, a, b))) out.push(n);
       return out;
     };
     const notes = []; let c = bar * (1 + Math.floor(rnd() * 2)), prev = null, phrase = 0, join = false; // everything sits on bar lines
@@ -664,10 +664,66 @@
     const dlp = ctx.createBiquadFilter(); dlp.type = 'lowpass'; dlp.frequency.value = acid ? 2000 : 2600;
     const fb = ctx.createGain(); fb.gain.value = 0.33; const dg = ctx.createGain(); dg.gain.value = acid ? 0.3 : 0.26;
     bus.connect(dg).connect(dly); dly.connect(dlp).connect(fb).connect(dly); dlp.connect(out); dlp.connect(verb.in(0.5));
-    for (const ph of phrasesOf(planLongNotes(m, cfg))) {
-      if (acid) acidVoice(ctx, bus, { notes: ph, rnd: m.rnd, L: m.L, bar: m.bar, pan: 0.25, gain: 0.075 });
-      else glideLead(ctx, bus, { notes: ph, rnd: m.rnd, pan: -0.2, gain: 0.1 });
+    /* Complexity: layer 0 is the plan above (a few long notes). Layer 1 adds a second, shorter line one octave higher in the
+       gaps and over the long notes, planned with a stream of its own and kept a tone away from the long notes it sounds with.
+       Layer 2 adds a quiet plucked ornament line in the lyrical style on top. */
+    const voice = (notes, pan, gain) => { for (const ph of phrasesOf(notes)) { if (acid) acidVoice(ctx, bus, { notes: ph, rnd: m.rndT, L: m.L, bar: m.bar, pan, gain }); else glideLead(ctx, bus, { notes: ph, rnd: m.rndT, pan, gain }); } };
+    if (m.want(0)) { for (const ph of phrasesOf(planLongNotes(m, cfg))) { if (acid) acidVoice(ctx, bus, { notes: ph, rnd: m.rnd, L: m.L, bar: m.bar, pan: 0.25, gain: 0.075 }); else glideLead(ctx, bus, { notes: ph, rnd: m.rnd, pan: -0.2, gain: 0.1 }); } }
+    if (m.tier === 1 || m.tier === null) {
+      const saved = lastLongPlan, base = planLongNotes({ ...m, rnd: m.mkRnd() }, cfg); /* layer 0's notes, rebuilt from the same seed */
+      const near = (n, a, b) => base.some((x) => x.t < b - 1e-6 && x.t + x.d > a + 1e-6 && [1, 11].includes((((n - x.n) % 12) + 12) % 12)); /* true = reject: a semitone from a long note that sounds with it */
+      const cfg1 = { ...cfg, lo: cfg.lo + 12, hi: cfg.hi + 12, lens: [1, 2, 2, 3], rest: [0.5, 2], legato: 0.5, maxPhrase: 3, wander: 4, accent: 0.2, avoid: near };
+      const n1 = planLongNotes({ ...m, rnd: m.rndT }, cfg1); lastLongPlan = saved;
+      voice(n1, acid ? -0.25 : 0.25, acid ? 0.05 : 0.065);
     }
+    if (m.want(2)) pluckedMelody(ctx, out, verb, { ...m, rnd: m.rndT, want: () => true }, 'lyrical', 0.55); /* every note of this line belongs to layer 2 */
+  }
+
+  /* The note-by-note melody (every style except glide and acid). Complexity: strong beats and phrase ends in layer 0, the other beats in layer 1, the off-beats in layer 2.
+     gainMul lets the long leads reuse it as a quiet ornament layer. */
+  function pluckedMelody(ctx, out, verb, m, styleKey, gainMul) {
+    // Four characters to choose from. pOn/pOff: chance of a note on a beat / off-beat; hold: extra chance after a long gap;
+    // step: how far each note may move (in scale steps); oct: octave shift; decay: ring time; echo: delay level.
+    const STYLES = { // ('glide' and 'acid' are handled by longMelody)
+      lyrical: { pOn: 0.30, pOff: 0.05, hold: 0.5, step: 3.2, oct: 0, type: 'triangle', decay: 1.0, echo: 0.28 },
+      flowing: { pOn: 0.65, pOff: 0.5, hold: 0.0, step: 3.0, oct: 0, type: 'triangle', decay: 0.5, echo: 0.2 },
+      leaping: { pOn: 0.42, pOff: 0.22, hold: 0.3, step: 8.0, oct: 0, type: 'triangle', decay: 0.7, echo: 0.3 },
+      bright: { pOn: 0.22, pOff: 0.05, hold: 0.6, step: 4.0, oct: 12, type: 'sine', decay: 1.8, echo: 0.4 },
+    };
+    const st = STYLES[styleKey] || { pOn: 0.38, pOff: 0.16, hold: 0.4, step: 4.4, oct: 0, type: 'triangle', decay: 0.8, echo: 0.28 };
+    const bus = ctx.createGain(); bus.connect(out); bus.connect(verb.in(0.9));
+    const dly = ctx.createDelay(1); dly.delayTime.value = m.beat * 0.75; // dotted-8th echo
+    const fb = ctx.createGain(); fb.gain.value = 0.3; const dg = ctx.createGain(); dg.gain.value = st.echo;
+    bus.connect(dg).connect(dly); dly.connect(fb).connect(dly); dly.connect(out); dly.connect(verb.in(0.5));
+    const poolAll = [];
+    const mb = m.custom ? 0 : 12; /* a chord chart plays the melody an octave lower */
+    for (let o = 0; o < 3; o++) for (const d of m.scale) { const n = m.root + mb + o * 12 + d; if (n <= m.root + mb + 19) poolAll.push(n); }
+    let pool = poolAll;
+    const pcs = (chord) => chord.map((n) => ((n % 12) + 12) % 12);
+    const isTone = (n, chord) => pcs(chord).includes(((n - m.root) % 12 + 12) % 12);
+    const nearest = (n, pred) => pool.filter(pred).sort((a, b) => Math.abs(a - n) - Math.abs(b - n))[0] ?? n;
+    let cur = nearest(m.root + mb + 7, (n) => isTone(n, m.prog[0]));
+    m.forProg((chord, t0, seg, i, cnt) => {
+      if (m.ambient) { const ok = poolAll.filter((n) => m.plan.okAbove(n + st.oct, i)); /* st.oct: the 'bright' style plays an octave up */ pool = ok.length ? ok : poolAll; } // notes that fit under this chord's pad/atmos/bass
+      const next = m.prog[(i + 1) % cnt], last = !m.ambient && i === cnt - 1, slots = Math.round(seg / (m.beat / 2));
+      const onsets = [0];
+      for (let s = 2; s < slots; s++) {
+        const gap = s - onsets[onsets.length - 1];
+        if (gap >= 2 && m.rnd() < (s % 2 === 0 ? st.pOn : st.pOff) + (gap >= 5 ? st.hold : 0)) onsets.push(s);
+      }
+      onsets.forEach((s, k) => {
+        const strong = s % 4 === 0, final = k === onsets.length - 1, lv = strong || final ? 0 : s % 2 === 0 ? 1 : 2; /* complexity: strong beats and phrase ends, then the other beats, then the off-beats */
+        let idx = pool.indexOf(cur);
+        idx = Math.max(0, Math.min(pool.length - 1, idx + Math.round((m.rnd() - 0.5) * st.step)));
+        let n = pool[idx];
+        if (final) n = last ? nearest(cur, (x) => (x - m.root) % 12 === 0)
+          : nearest(cur, (x) => isTone(x, next));
+        else if (strong || k === 0) n = nearest(n, (x) => isTone(x, chord));
+        cur = n;
+        const dur = ((onsets[k + 1] ?? slots) - s) * m.beat / 2, pan = (m.rnd() - 0.5) * 0.4;
+        if (m.want(lv)) pluck(ctx, bus, { t: t0 + s * m.beat / 2, freq: mtof(n + st.oct), gain: (strong ? 0.32 : 0.25) * (st.oct ? 0.75 : 1) * gainMul, decay: Math.min(3, st.decay + dur), type: st.type, pan });
+      });
+    });
   }
 
   // ---------- stems ----------
@@ -762,7 +818,7 @@
         const a = Math.min(attack, dur * 0.5), r = release;
         g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(gain, t + a);
         if (from !== null) { /* dip a little while the pitch settles, so the scoop is soft */
-          const t1 = t + 0.1, t2 = t1 + slideSec;
+          const t1 = Math.max(t + 0.1, t + a), t2 = t1 + slideSec; /* start the dip only once the fade-in has finished: setting the gain to its full value mid fade-in was a click */
           g.gain.setValueAtTime(gain, t1); g.gain.linearRampToValueAtTime(gain * 0.8, t1 + slideSec * 0.5); g.gain.linearRampToValueAtTime(gain, t2);
           g.gain.setValueAtTime(gain, Math.max(t2, end));
         } else g.gain.setValueAtTime(gain, Math.max(t + a, end));
@@ -776,15 +832,20 @@
           const og = ctx.createGain(); og.gain.value = lv; o.connect(og).connect(g); o.start(t); o.stop(end + r + 0.1);
         });
       };
-      if (strict) { for (let b = 0; b < nBars; b++) note(b * m.bar, m.bar, m.plan.sub[b % m.plan.sub.length], { attack: 0.35, release: 0.35 }); return; }
+      /* Complexity: layer 0 is one long note per chord, layer 1 the extra leap or scoop of the chord, layer 2 a soft pluck on every bar line. */
+      if (strict) { if (m.want(0)) for (let b = 0; b < nBars; b++) note(b * m.bar, m.bar, m.plan.sub[b % m.plan.sub.length], { attack: 0.35, release: 0.35 }); return; }
       for (let c = 0; c < Math.round(m.L / (B * m.plan.chordBeats)); c++) f.frequency.setValueAtTime(150 + m.rnd() * 110, c * B * m.plan.chordBeats);
       const cycle = (m.plan.cycleBeats ?? m.plan.chordBeats * 4) * B;
-      for (let rep = 0; rep * cycle < m.L - 1e-6; rep++) for (const e of m.plan.subEv) {
-        note(rep * cycle + e.t * B, e.d * B, e.n, {
-          attack: 0.9 + m.rnd() * 0.8, release: 1.4 + m.rnd() * 1.0,
-          from: e.from ?? null, slideSec: (e.sb || 0) * B,
-        });
+      for (let rep = 0; rep * cycle < m.L - 1e-6; rep++) {
+        const seen = {};
+        for (const e of m.plan.subEv) {
+          const w = Math.floor(e.t / m.plan.chordBeats), lv = Math.min(2, seen[w] = (seen[w] ?? -1) + 1); /* the 1st, 2nd and later note of its chord */
+          const attack = 0.9 + m.rnd() * 0.8, release = 1.4 + m.rnd() * 1.0;
+          if (lv === 2 ? !m.want(1) : !m.want(lv)) continue;
+          note(rep * cycle + e.t * B, e.d * B, e.n, { attack, release, from: e.from ?? null, slideSec: (e.sb || 0) * B });
+        }
       }
+      if (m.want(2)) for (let b = 0; b < nBars; b++) pluck(ctx, f, { t: b * m.bar, freq: mtof(m.plan.sub[b % m.plan.sub.length]), gain: 0.3, decay: 1.6, type: 'sine' });
     },
 
     arp(ctx, out, verb, m) {
@@ -796,13 +857,16 @@
       bus.connect(delay); delay.connect(dl).connect(fb).connect(delay); dl.connect(out);
       const pattern = [0, 2, 1, 3, 4, 2, 3, 1];
       const step = m.beat / 2;
+      /* Complexity: layer 0 plays every other beat, layer 1 the beats in between plus the off-beat eighths (the original pattern, with its random gaps),
+         layer 2 adds quiet sixteenth-note fills, now and then an octave up. */
       m.forChords((chord, t0, seg, ci) => {
         const steps = Math.round(seg / step), tones = m.plan.arp[ci];
         if (!tones.length) return;
         for (let s = 0; s < steps; s++) {
-          if (m.rnd() < 0.18) continue;
-          const note = tones[pattern[s % pattern.length] % tones.length];
-          pluck(ctx, bus, { t: t0 + s * step, freq: mtof(note), gain: 0.11 + m.rnd() * 0.07, decay: 1.4, pan: Math.sin(s * 0.9) * 0.5 });
+          const skip = m.rnd() < 0.18, g = m.rnd(), g16 = m.rnd(), pick = m.rnd(), oct = m.rnd(); /* the same draws in every layer */
+          const note = tones[pattern[s % pattern.length] % tones.length], lv = s % 4 === 0 ? 0 : 1;
+          if (m.want(lv) && !(lv > 0 && skip)) pluck(ctx, bus, { t: t0 + s * step, freq: mtof(note), gain: 0.11 + g * 0.07, decay: 1.4, pan: Math.sin(s * 0.9) * 0.5 });
+          if (m.want(2) && pick < 0.55) pluck(ctx, bus, { t: t0 + s * step + step / 2, freq: mtof(tones[pattern[(s + 1) % pattern.length] % tones.length] + (oct < 0.3 ? 12 : 0)), gain: 0.05 + g16 * 0.04, decay: 0.9, pan: Math.sin(s * 0.9 + 1) * 0.5 });
         }
       });
     },
@@ -831,35 +895,44 @@
 
     pulse(ctx, out, verb, m) {
       // A slow collective heartbeat (lub-dub on beats 1 and 3) + soft shaker.
+      // Complexity: layer 0 is the heartbeat's first thump only; layer 1 adds the second thump and the shaker's eighth notes;
+      // layer 2 adds the sixteenth-note shaker, the pick-up before the bar line and a ghost thump.
       const bus = ctx.createGain(); bus.connect(out); bus.connect(verb.in(0.15));
       const beats = Math.round(m.L / m.beat);
       for (let b = 0; b < beats; b++) {
         const t = b * m.beat, inBar = b % m.bpb;
         if (inBar === 0 || inBar === Math.floor(m.bpb / 2)) {
           // tuned to the key: each beat drops onto the tonic (D2 in D), the same D the Drone and Sub sit on
-          thump(ctx, bus, { t, gain: 0.55, f0: mtof(m.root), f1: mtof(m.root - 12) });
-          thump(ctx, bus, { t: t + 0.22, gain: 0.32, f0: mtof(m.root - 5), f1: mtof(m.root - 12), decay: 0.35 });
+          if (m.want(0)) thump(ctx, bus, { t, gain: 0.55, f0: mtof(m.root), f1: mtof(m.root - 12) });
+          if (m.want(1)) thump(ctx, bus, { t: t + 0.22, gain: 0.32, f0: mtof(m.root - 5), f1: mtof(m.root - 12), decay: 0.35 });
         }
         for (let s = 0; s < 4; s++) {
           const acc = s === 2 ? 1 : s === 0 ? 0.5 : 0.3;
-          if (m.rnd() < 0.12) continue;
-          noiseHit(ctx, bus, m.noise, { t: t + s * m.beat / 4, gain: 0.035 * acc * (0.7 + m.rnd() * 0.6), decay: 0.07, hp: 7000, pan: (m.rnd() - 0.5) * 0.8, offset: m.rnd() * 5 });
+          const skip = m.rnd() < 0.12, g = m.rnd(), pn = m.rnd(), off = m.rnd();
+          if (skip || !m.want(s % 2 === 0 ? 1 : 2)) continue;
+          noiseHit(ctx, bus, m.noise, { t: t + s * m.beat / 4, gain: 0.035 * acc * (0.7 + g * 0.6), decay: 0.07, hp: 7000, pan: (pn - 0.5) * 0.8, offset: off * 5 });
         }
-        if (inBar === m.bpb - 1 && m.rnd() < 0.6)
-          noiseHit(ctx, bus, m.noise, { t: t + m.beat / 2, gain: 0.08, decay: 0.12, hp: 2500, offset: m.rnd() * 5 });
+        if (inBar === m.bpb - 1) {
+          const pickup = m.rnd() < 0.6, off = m.rnd(), ghost = m.rnd() < 0.5;
+          if (pickup && m.want(2)) noiseHit(ctx, bus, m.noise, { t: t + m.beat / 2, gain: 0.08, decay: 0.12, hp: 2500, offset: off * 5 });
+          if (ghost && m.want(2)) thump(ctx, bus, { t: t + m.beat / 2, gain: 0.3, f0: mtof(m.root - 5), f1: mtof(m.root - 12), decay: 0.3 });
+        }
       }
     },
 
     bells(ctx, out, verb, m) {
+      /* Complexity: layer 0 is the first bell of each chord, layer 1 the others (the original 1-3), layer 2 three more, softer ones. */
       const bus = ctx.createGain(); bus.connect(out); bus.connect(verb.in(1.1));
       m.forChords((chord, t0, seg, ci) => {
         const tones = chord.map((n) => ((n % 12) + 12) % 12).filter((n) => m.custom || PENTA.includes(n) || m.rnd() < 0.3);
         const count = 1 + Math.floor(m.rnd() * 3);
-        for (let k = 0; k < count; k++) {
+        for (let k = 0; k < count + 3; k++) {
           const beatPos = Math.floor(m.rnd() * Math.round(seg / m.beat));
           const n = tones[Math.floor(m.rnd() * tones.length)] ?? 0;
-          const bn = m.plan.fit(m.root + (m.custom ? 12 : 24) + n, ci); const bt = t0 + beatPos * m.beat + (m.rnd() < 0.3 ? m.beat / 2 : 0); if (bn === null) continue;
-          bell(ctx, bus, { t: bt, freq: mtof(bn), gain: 0.07 + m.rnd() * 0.05, decay: 5, pan: (m.rnd() - 0.5) * 1.2 });
+          const half = m.rnd() < 0.3, g = m.rnd(), pn = m.rnd(), lv = k === 0 ? 0 : k < count ? 1 : 2;
+          if (!m.want(lv)) continue;
+          const bn = m.plan.fit(m.root + (m.custom ? 12 : 24) + n, ci), bt = t0 + beatPos * m.beat + (half ? m.beat / 2 : 0); if (bn === null) continue;
+          bell(ctx, bus, { t: bt, freq: mtof(bn), gain: lv === 2 ? 0.045 + g * 0.035 : 0.07 + g * 0.05, decay: 5, pan: (pn - 0.5) * 1.2 });
         }
       });
     },
@@ -898,59 +971,34 @@
     // between them, each phrase leans toward the next chord, and the last phrase lands on the tonic.
     melody(ctx, out, verb, m) {
       if (m.style === 'glide' || m.style === 'acid') return longMelody(ctx, out, verb, m); // Melody A / B of the Layers pack: long, sparse analog leads (see above)
-      // Four characters to choose from. pOn/pOff: chance of a note on a beat / off-beat; hold: extra chance after a long gap;
-      // step: how far each note may move (in scale steps); oct: octave shift; decay: ring time; echo: delay level.
-      const STYLES = { // ('glide' and 'acid' are handled by longMelody above)
-        lyrical: { pOn: 0.30, pOff: 0.05, hold: 0.5, step: 3.2, oct: 0, type: 'triangle', decay: 1.0, echo: 0.28 },
-        flowing: { pOn: 0.65, pOff: 0.5, hold: 0.0, step: 3.0, oct: 0, type: 'triangle', decay: 0.5, echo: 0.2 },
-        leaping: { pOn: 0.42, pOff: 0.22, hold: 0.3, step: 8.0, oct: 0, type: 'triangle', decay: 0.7, echo: 0.3 },
-        bright: { pOn: 0.22, pOff: 0.05, hold: 0.6, step: 4.0, oct: 12, type: 'sine', decay: 1.8, echo: 0.4 },
-      };
-      const st = STYLES[m.style] || { pOn: 0.38, pOff: 0.16, hold: 0.4, step: 4.4, oct: 0, type: 'triangle', decay: 0.8, echo: 0.28 };
-      const bus = ctx.createGain(); bus.connect(out); bus.connect(verb.in(0.9));
-      const dly = ctx.createDelay(1); dly.delayTime.value = m.beat * 0.75; // dotted-8th echo
-      const fb = ctx.createGain(); fb.gain.value = 0.3; const dg = ctx.createGain(); dg.gain.value = st.echo;
-      bus.connect(dg).connect(dly); dly.connect(fb).connect(dly); dly.connect(out); dly.connect(verb.in(0.5));
-      const poolAll = [];
-      const mb = m.custom ? 0 : 12; /* a chord chart plays the melody an octave lower */
-      for (let o = 0; o < 3; o++) for (const d of m.scale) { const n = m.root + mb + o * 12 + d; if (n <= m.root + mb + 19) poolAll.push(n); }
-      let pool = poolAll;
-      const pcs = (chord) => chord.map((n) => ((n % 12) + 12) % 12);
-      const isTone = (n, chord) => pcs(chord).includes(((n - m.root) % 12 + 12) % 12);
-      const nearest = (n, pred) => pool.filter(pred).sort((a, b) => Math.abs(a - n) - Math.abs(b - n))[0] ?? n;
-      let cur = nearest(m.root + mb + 7, (n) => isTone(n, m.prog[0]));
-      m.forProg((chord, t0, seg, i, cnt) => {
-        if (m.ambient) { const ok = poolAll.filter((n) => m.plan.okAbove(n + st.oct, i)); /* st.oct: the 'bright' style plays an octave up */ pool = ok.length ? ok : poolAll; } // notes that fit under this chord's pad/atmos/bass
-        const next = m.prog[(i + 1) % cnt], last = !m.ambient && i === cnt - 1, slots = Math.round(seg / (m.beat / 2));
-        const onsets = [0];
-        for (let s = 2; s < slots; s++) {
-          const gap = s - onsets[onsets.length - 1];
-          if (gap >= 2 && m.rnd() < (s % 2 === 0 ? st.pOn : st.pOff) + (gap >= 5 ? st.hold : 0)) onsets.push(s);
-        }
-        onsets.forEach((s, k) => {
-          const strong = s % 4 === 0, final = k === onsets.length - 1;
-          let idx = pool.indexOf(cur);
-          idx = Math.max(0, Math.min(pool.length - 1, idx + Math.round((m.rnd() - 0.5) * st.step)));
-          let n = pool[idx];
-          if (final) n = last ? nearest(cur, (x) => (x - m.root) % 12 === 0)
-            : nearest(cur, (x) => isTone(x, next));
-          else if (strong || k === 0) n = nearest(n, (x) => isTone(x, chord));
-          cur = n;
-          const dur = ((onsets[k + 1] ?? slots) - s) * m.beat / 2;
-          pluck(ctx, bus, { t: t0 + s * m.beat / 2, freq: mtof(n + st.oct), gain: (strong ? 0.32 : 0.25) * (st.oct ? 0.75 : 1), decay: Math.min(3, st.decay + dur), type: st.type, pan: (m.rnd() - 0.5) * 0.4 });
-        });
-      });
+      return pluckedMelody(ctx, out, verb, m, m.style, 1);
     },
 
     shimmer(ctx, out, verb, m) {
+      /* An aggressive, tremolo-effected distorted-guitar voice with a slight wah: sustained chord tones on detuned saws and a square,
+         through a pedal chain: wah (a band-pass sweeping slowly, mixed with the dry signal so it stays slight) -> heavy distortion ->
+         a low-pass that tames the fizz -> a deep, fast tremolo. The tremolo and wah are LFOs with whole cycles per loop, so the loop is seamless. */
       const bus = ctx.createGain(); bus.gain.value = 1;
-      lfo(ctx, bus.gain, { L: m.L, cycles: 8, depth: 0.25 });
-      const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = m.custom ? 420 : 900;
-      bus.connect(hp); hp.connect(out); hp.connect(verb.in(1.4));
-      m.forChords((chord, t, seg, ci) => [chord[1], chord[2], chord[4] ?? chord[3]].forEach((n, i) => {
-        const sn = m.plan.fit(m.root + (m.custom ? 12 : 24) + n, ci); if (sn === null) return;
-        padVoice(ctx, bus, { t, dur: seg, xf: 3, freq: mtof(sn), types: ['sine', 'triangle'], detune: 4, gain: 0.03, pan: (i - 1) * 0.6 });
-      }));
+      const hpIn = ctx.createBiquadFilter(); hpIn.type = 'highpass'; hpIn.frequency.value = 160; bus.connect(hpIn); /* keep the mud out of the distortion */
+      const wahSum = ctx.createGain(), dry = ctx.createGain(), wet = ctx.createGain(); dry.gain.value = 0.75; wet.gain.value = 1.1;
+      const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.Q.value = 3; bp.frequency.value = 1100;
+      hpIn.connect(dry).connect(wahSum); hpIn.connect(bp).connect(wet).connect(wahSum);
+      lfo(ctx, bp.frequency, { L: m.L, cycles: Math.max(1, Math.round(m.L * 0.33)), depth: 600, phase: m.rnd() * 6.28 }); /* wah: 500-1700 Hz, about once every 3 s */
+      const dist = ctx.createWaveShaper(); dist.curve = driveCurve(9); dist.oversample = '4x';
+      const fizz = ctx.createBiquadFilter(); fizz.type = 'lowpass'; fizz.frequency.value = 4200; fizz.Q.value = 0.7;
+      const trem = ctx.createGain(); trem.gain.value = 0.52;
+      lfo(ctx, trem.gain, { L: m.L, cycles: Math.max(1, Math.round(m.L * 5.5)), depth: 0.42, phase: m.rnd() * 6.28 }); /* tremolo: 5.5 Hz, deep (0.1-0.94) */
+      const level = ctx.createGain(); level.gain.value = 0.04;
+      wahSum.connect(dist).connect(fizz).connect(trem).connect(level);
+      level.connect(out); level.connect(verb.in(1.1));
+      const echo = ctx.createDelay(2), efb = ctx.createGain(), elp = ctx.createBiquadFilter(), eg = ctx.createGain();
+      echo.delayTime.value = m.beat * 0.75; efb.gain.value = 0.3; elp.type = 'lowpass'; elp.frequency.value = 2600; eg.gain.value = 0.3;
+      level.connect(eg).connect(echo); echo.connect(elp).connect(efb).connect(echo); elp.connect(out);
+      /* Complexity: layer 0 is one chord tone, layer 1 adds a second, layer 2 the third plus the first an octave up. */
+      m.forChords((chord, t, seg, ci) => {
+        const tone = (n, lv, up = 0) => { if (!m.want(lv)) return; const sn = m.plan.fit(m.root + (m.custom ? 12 : 24) + n + up, ci); if (sn === null) return; padVoice(ctx, bus, { t, dur: seg, xf: 0.5, freq: mtof(sn), types: ['sawtooth', 'sawtooth', 'square'], detune: 6, gain: up ? 0.2 : 0.3, pan: 0 }); };
+        tone(chord[1], 0); tone(chord[2], 1); tone(chord[4] ?? chord[3], 2); tone(chord[1], 2, 12);
+      });
     },
   };
 
@@ -997,7 +1045,8 @@
    * Render one stem. Returns an AudioBuffer exactly `bars` bars long.
    * opts: { lush: { voices, verb } (both default true), synth, sampleRate, tempo, beatsPerBar, bars, key, mode ('minor'|'major'), progression ('ambient' | default 1-4-3-6-2-5-1), style (melody: lyrical|flowing|leaping|bright|glide|acid), seed, id }
    */
-  async function renderStem(opts) {
+  async function renderTier(opts) {
+    const tier = opts.tier ?? null; // null = everything in one buffer; 0, 1, 2 = one complexity layer (see renderStem)
     const { synth, sampleRate, tempo, beatsPerBar: bpb, key, seed, id } = opts, bars = opts.custom ? opts.custom.bars : opts.bars;
     const customFull = opts.custom || null; // a chord chart loaded from MusicXML: replaces the built-in progressions for every generated stem
     const custom = customFull ? slowHarmony(customFull) : null; // the upper voices follow one chord per bar (see slowHarmony)
@@ -1031,6 +1080,8 @@
 
     const seg = bar * 2; // one chord every 2 bars
     const m = {
+      tier, want: (lv) => tier === null || tier === lv, /* events of complexity level lv are built only in the layer for lv */
+      rndT: mulberry32(hash(`${seed}:${synth}:${id}:t${tier}`)), mkRnd: () => mulberry32(hash(`${seed}:${synth}:${id}`)), /* a stream of its own for this layer, and a fresh copy of the shared one */
       lush, mode, prog, ambient, style, custom, plan: custom ? buildCustomPlan(KEY_ROOTS[key] ?? 50, seed, customFull, bpb) : buildPlan(KEY_ROOTS[key] ?? 50, seed, { bpb, mode: 'minor' }), scale: SCALES[mode], root: KEY_ROOTS[key] ?? 50, beat, bar, bpb, L, rnd, noise,
       // The progression's chords spread over the loop in whole bars; extra bars go to the first chords (7 chords in 8 bars -> 2,1,1,1,1,1,1; the 4 ambient chords -> 2 bars each).
       forProg(fn) {
@@ -1044,6 +1095,10 @@
     build(ctx, out, verb, m);
 
     const r = await ctx.startRendering();
+    // The render stops TAIL seconds after the loop end. Whatever is still ringing then (a long delay or reverb under the bass) would be cut
+    // off with a click when it is folded in, so fade the last 5 s of the tail to silence first.
+    const fadeN = Math.round(5 * sampleRate);
+    for (let ch = 0; ch < 2; ch++) { const src = r.getChannelData(ch); for (let q = 0; q < fadeN && q < src.length; q++) src[src.length - 1 - q] *= 0.5 - 0.5 * Math.cos(Math.PI * q / fadeN); }
     // Fold the tail back onto the start -> seamless circular loop.
     const loop = new AudioBuffer({ length: N, numberOfChannels: 2, sampleRate });
     let peak = 0;
@@ -1052,11 +1107,28 @@
       for (let i = 0; i < src.length; i++) dst[i % N] += src[i];
       for (let i = 0; i < N; i++) peak = Math.max(peak, Math.abs(dst[i]));
     }
-    if (peak > 0.95) { // keep headroom; never clip a stem on its own
+    if (tier === null && peak > 0.95) { // keep headroom; never clip a stem on its own (complexity layers are scaled together in renderStem)
       const k = 0.95 / peak;
       for (let ch = 0; ch < 2; ch++) { const d = loop.getChannelData(ch); for (let i = 0; i < N; i++) d[i] *= k; }
     }
     return loop;
+  }
+
+
+  /* Synths whose stems have a complexity control (melodic and rhythmic layers): rendered as three same-length loops that play in sync.
+     Layer 0 is the sparse base, layers 1 and 2 add notes. The engine fades layers 1 and 2 in and out with the XY pad's X axis. */
+  const TIERED = new Set(['arp', 'bells', 'shimmer', 'melody', 'pulse', 'sub']);
+  const hasTiers = (synth) => TIERED.has(synth);
+  /* Returns an AudioBuffer. With opts.tiers, the buffer is layer 0 and its `layers` property holds layers 1 and 2. */
+  async function renderStem(opts) {
+    if (!opts.tiers || !hasTiers(opts.synth)) return renderTier({ ...opts, tier: null });
+    const bufs = [];
+    for (let t = 0; t < 3; t++) bufs.push(await renderTier({ ...opts, tier: t }));
+    const n = bufs[0].length; let peak = 0; const d = bufs.map((b) => [b.getChannelData(0), b.getChannelData(1)]);
+    for (let ch = 0; ch < 2; ch++) for (let i = 0; i < n; i++) peak = Math.max(peak, Math.abs(d[0][ch][i] + d[1][ch][i] + d[2][ch][i])); /* the loudest the three layers get together */
+    if (peak > 0.95) { const k = 0.95 / peak; for (const c of d) for (const a of c) for (let i = 0; i < n; i++) a[i] *= k; }
+    bufs[0].layers = [bufs[1], bufs[2]];
+    return bufs[0];
   }
 
   // Encode an AudioBuffer as a 16-bit WAV Blob (for exporting generated stems).
@@ -1074,5 +1146,5 @@
     return new Blob([ab], { type: 'audio/wav' });
   }
 
-  window.ResonanceSynth = { lastLongPlan: () => lastLongPlan, renderStem, toWav, chordTimeline, buildPlan, buildCustomPlan, slowHarmony, KEY_ROOTS, KEYS: ['C', 'C#', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B'] };
+  window.ResonanceSynth = { hasTiers, lastLongPlan: () => lastLongPlan, renderStem, toWav, chordTimeline, buildPlan, buildCustomPlan, slowHarmony, KEY_ROOTS, KEYS: ['C', 'C#', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B'] };
 })();
