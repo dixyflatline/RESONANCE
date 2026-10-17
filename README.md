@@ -40,7 +40,7 @@ npm start              # server on http://localhost:8080
 1. Open **http://localhost:8080/engine** and send this computer's audio output to the PA.
 2. Click **Start engine**. It renders the stems, then everything starts silent.
 3. Open the **☰ menu** to show the QR code and join link for the audience.
-4. Shape the performance from the sidebar: BPM (while music is playing the tempo glides to the new value, 3 BPM per bar; with nothing playing it jumps straight to it and takes effect at once), progression runs (Endless, or 1 to 64 runs, then an automatic fade-out), quantize, key, fades, brightness and master volume. Toggle stems yourself by clicking them; the engine page is not limited by audience rules.
+4. Shape the performance from the sidebar: BPM (while music is playing the tempo glides to the new value, 3 BPM per bar; with nothing playing it jumps straight to it without rendering anything; the stems are rendered once, at the new tempo, when the first stem is switched on), progression runs (Endless, or 1 to 64 runs, then an automatic fade-out), quantize, key, fades, brightness and master volume. Toggle stems yourself by clicking them; the engine page is not limited by audience rules.
 5. **Chord display for** switches the on-screen chords between concert pitch and **B♭ instruments** (trumpet, clarinet, tenor sax), which read two semitones higher: Dm9 · B♭maj7♯11 · Fmaj9 · C6/9 shows as Em9 · Cmaj7♯11 · Gmaj9 · D6/9. Only the display changes, never the audio, and the choice is remembered in the browser.
 5. **New variation** re-seeds the melodies, bells, arp, bass and rhythm details. **Stop all** fades the layers out in order, colour first and drone last.
 
@@ -140,12 +140,16 @@ How complexity works: the music is pre-rendered in loops, so complexity is built
 | Layer | Base (sparse) | + layer 1 | + layer 2 |
 |---|---|---|---|
 | Arp | a note every 2 beats | the beats in between and the off-beat eighths (the old pattern, with its gaps) | quiet sixteenth-note fills, sometimes an octave up |
-| Bells | the first bell of each chord | the other bells (1 to 3 per chord, as before) | three more, softer bells |
+| Bells | the first bell of each chord | three more bells per chord | four more, softer bells (8 per chord in all) |
 | Shimmer | one chord tone | a second chord tone | the third tone and the first an octave up |
-| Melody A, B (long leads) | the long notes | a second, shorter line an octave up that keeps a semitone away from the long notes | a quiet plucked ornament line |
+| Melody A, B (long leads) | the long notes | a second, shorter line an octave up that keeps a semitone away from the long notes, plus the 12 strongest notes of a plucked line | the other 16 notes of that plucked line (a note on almost every beat) |
 | Other melodies (lyrical, flowing, ...) | strong beats and phrase ends | the other beats | the off-beats |
-| Pulse | the heartbeat's first thump | the second thump and the shaker's eighths | sixteenth shaker, pick-up, ghost thump |
-| Sub | one long note per chord | the leap or scoop of the chord | a soft pluck on every bar line |
+| Pulse | the heartbeat's first thump | the second thump, the shaker's eighths and a tuned tom after beats 2 and 4 | sixteenth shaker, pick-up, ghost thump and a second tom on the last sixteenth of every beat |
+| Sub | one long note per chord (the original sound) | a soft pulse on the bar's root on every beat (quarter notes) | pulses in between as well (eighth notes) |
+
+Gate length (Arp and Bells): every note also gets longer as the complexity rises. At the sparse end each note is a short pluck (Arp) or a short bell strike, layer 1 adds a longer tail of the same pitch (about the old note length) and layer 2 a still longer one, so notes ring longer before they are cut off. Tails are separate soft-attack layers of the same notes, so the change glides with the pad.
+
+Density target (per 8 bars) for Melody A, Melody B and Bells: about 4 notes at the sparse end (the original sound, unchanged), 16 at the middle (X about 0.5) and 32 at the complex end, i.e. 1, 4 and 8 notes per 2 bars. The Sub does not add notes; it pulses instead (quarter notes in the middle, eighth notes at the complex end). Pulse keeps its own scale: 16 thumps at the sparse end and over 100 hits (thumps, toms and shaker) at the complex end.
 
 Rendering takes about twice as long as before, and the extra layers use about three times the memory of those layers. The exported WAV of such a layer is the full mix (base plus both layers).
 
@@ -244,6 +248,27 @@ Each loop is rendered in circular time: the reverb, delay and note tails past th
 
 **Staying clear of the Drone:** see *Harmony rules* below. The Pulse heartbeat drops onto the tonic of the key (D2 in D) and follows the Key menu.
 
+## Rehearsal: simulated audience and monitor
+
+Practise playing against a changing room without a room full of people. Open **http://localhost:8080/rehearsal** (the same machine that runs the server; there is also a link in the engine menu).
+
+- **Five simulated people** connect to the server like real phones (WebSocket, `role=client`), so every audience rule applies to them: group limits, cooldowns, the nature samples' two-person vote, the pad ranges. Each has a persona: *Explorer* (tries lots of layers), *Tweaker* (shapes one layer with the pad), *Rhythm lover* (rhythm and melody layers, big complexity sweeps), *Calm listener* (nature and soft touches) and *Mischief* (fast flips, wild cutoff and volume). Change a person's persona or send them out of the room at any time.
+- **The room:** *Calm*, *Busy* and *Storm* set how active everyone is; *Waves* makes the room breathe between calm and busy every few minutes; the Activity slider sets the level; *People come and go* makes them leave and return, so the crowd size changes.
+- **The monitor** shows every stem (off, waiting for the bar, sounding, a vote in progress, its pad position and volume, and who touched it last), the group limits, the five people and what each is doing, a 3-minute activity chart and a log of what just happened (refusals included). It also shows real phones and your own taps on the engine page, so you can rehearse with a mixed room.
+- **The gong** is never voted by the simulation on its own. *Gong vote now* (two clicks) makes three simulated people vote together; if it succeeds, the show ends as it would for an audience.
+- **Access:** the page, `/api/sim` and the monitor socket answer only to the machine the server runs on (a request that arrives through a proxy counts as remote). With `ENGINE_KEY` set they answer to anyone with the key (`/rehearsal?key=…`). Everyone else gets the same 404 as for any page that does not exist, so phones cannot reach it. Use `localhost`, not the Wi-Fi address, on the same machine.
+- Files: `lib/sim.js` (the simulator), `admin/rehearsal.html` (the page; it lives outside `public/` so it is never served as a plain file), server routes in `server.js`.
+
+## Microcosm effect box
+
+A separate granular effect, in the spirit of the Hologram Electronics Microcosm pedal (`public/microcosm.js`, an AudioWorklet; a new implementation, not the pedal's code). It listens to the mix, keeps the last 12 seconds and plays it back as swarms of tiny grains, with feedback, a tone filter and a reverb. It is a wet-only send: the engine takes it after the brightness filter and returns it just before the compressor, so the dry mix is never touched. It is **off** when the engine starts.
+
+- **Where:** the *Microcosm effect box* panel in the engine sidebar (On/Off, preset menu, Activity, Size, Repeats, Tone, Mix). Its settings are remembered in the browser. The audience cannot reach it.
+- **Presets** (four families, two each): **Mosaic** (a tiny loop repeats in layers, some an octave up or down) and **Glitch** (tempo-synced stutter, skips, reverse slices); **Haze** (dense soft cloud) and **Tunnel** (long dark swells, backwards echoes); **Strum** (tuned harp-like strums on a minor pentatonic) and **Blocks** (the last bar chopped into chunks and replayed in a stepped order); **Warp** (slow wobbling pitch-bends) and **Pattern** (a tiny loop played as a tuned 16th-note arpeggio).
+- **Knobs:** Activity = how many grains / how fast (the stepped presets change step length), Size = grain and loop length, Repeats = feedback, Tone = low-pass filter, Mix = wet level. Choosing a preset moves the knobs to its own starting values.
+- **Tempo:** Glitch, Blocks, Pattern and Strum follow the engine BPM, including its glide.
+- **Audition it alone:** open `/micro.html` on the server. It plays a short loop of the Arp, Bells and Melody through the effect with the same presets and knobs.
+
 ## Groups and audience rules
 
 Packs can sort stems into groups with rules for remote participants. The `layers` pack has five:
@@ -334,6 +359,8 @@ curl -X POST localhost:8080/api/input -d '{"type":"param","name":"brightness","v
 A sensor bridge (for example a Python HRV/EEG process) can POST these messages, or open `ws://host:8080/ws?role=sensor` and send the same JSON. The *brightness* slider on the engine page uses this same path. It's a placeholder for the design doc's "arousal → brighter timbre" mapping.
 
 ## Files
+
+- `MANUAL.md`: the user manual for the operator (setup, playing, audience, effect box, rehearsal, troubleshooting)
 
 ```
 server.js          HTTP + WebSocket hub, state, input handling

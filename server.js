@@ -9,12 +9,17 @@ const path = require('path');
 const os = require('os');
 const { WebSocketServer } = require('ws');
 const { scanPacks, summary, publicGroup } = require('./lib/packs');
+const { Sim } = require('./lib/sim');
 
 const PORT = Number(process.env.PORT) || 8080;
 // When deployed publicly, set ENGINE_KEY so only you can run the audio engine or send
 // admin/sensor input. Open the engine as /engine?key=<ENGINE_KEY>. Unset = no key (local use).
 const ENGINE_KEY = process.env.ENGINE_KEY || '';
 const keyOk = (k) => !ENGINE_KEY || k === ENGINE_KEY;
+// The rehearsal tools (the monitor page, the audience simulator) are for the operator only. Without ENGINE_KEY they answer only to the machine the server
+// runs on (a request that came through a proxy counts as remote); with ENGINE_KEY set, anyone who has the key.
+const isLoopback = (req) => !req.headers['x-forwarded-for'] && !req.headers.forwarded && ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(req.socket.remoteAddress);
+const adminOk = (req, key) => (ENGINE_KEY ? key === ENGINE_KEY : isLoopback(req));
 const STARTED = Date.now();
 const SUPERVISED = process.env.RESONANCE_SUPERVISED === '1'; // started by tools/run.js (npm start): can restart itself
 
@@ -102,7 +107,7 @@ function switchOn(id, byAudience) {
     decayTimers.set(id, setTimeout(() => { decayTimers.delete(id); if (state.active.has(id)) { switchOff(id, 'faded away'); broadcastState(); } }, r.decay * 1000));
   }
 }
-function deny(sender, id, reason) { if (sender) send(sender, { type: 'denied', stem: id, reason }); }
+function deny(sender, id, reason) { if (sender) { send(sender, { type: 'denied', stem: id, reason }); act('client', sender, 'denied', { stem: id, reason }); } }
 /** A participant taps a stem. Returns true when the stem list changed. */
 function audienceToggle(id, sender) {
   const r = rulesOf(id), g = groupOf(id), now = Date.now();
@@ -168,6 +173,28 @@ const server = http.createServer((req, res) => {
 
   if (p === '/' || p === '/client') return sendFile(res, path.join(ROOT, 'public', 'client.html'));
   if (p === '/engine') return sendFile(res, path.join(ROOT, 'public', 'engine.html'));
+  if (p === '/rehearsal' || p === '/api/sim') { // operator only: clients get the same answer as for any page that does not exist
+    const key = req.headers['x-engine-key'] || url.searchParams.get('key');
+    if (!adminOk(req, key)) { res.writeHead(404); return res.end('Not found'); }
+    if (p === '/rehearsal') return sendFile(res, path.join(ROOT, 'admin', 'rehearsal.html'));
+    if (req.method === 'GET') return json(res, sim.status());
+    let body = '';
+    req.on('data', (c) => { body += c; if (body.length > 1e4) req.destroy(); });
+    req.on('end', () => {
+      let m; try { m = JSON.parse(body); } catch { res.writeHead(400); return res.end('bad json'); }
+      let out = { ok: true };
+      switch (m.action) {
+        case 'start': sim.start(); break;
+        case 'stop': sim.stop(); break;
+        case 'bot': sim.setBot(Number(m.i), m); break;
+        case 'set': sim.set(m); break;
+        case 'gong': out = sim.gongVote(); break;
+        default: res.writeHead(400); return res.end('unknown action');
+      }
+      json(res, { ...out, status: sim.status() });
+    });
+    return;
+  }
   if (p === '/api/config') return json(res, publicConfig());
   if (p === '/api/packs') { rescan(); return json(res, { active: active.id, packs: packList.map(summary) }); }
   if (p === '/api/state') return json(res, snapshot());
@@ -219,8 +246,8 @@ function publicConfig() {
 }
 
 function snapshot() {
-  let clients = 0;
-  for (const ws of wss.clients) if (ws.role === 'client' && ws.readyState === 1) clients++;
+  let clients = 0, simClients = 0;
+  for (const ws of wss.clients) if (ws.role === 'client' && ws.readyState === 1) { clients++; if (ws.simName) simClients++; }
   return {
     type: 'state',
     active: [...new Set([...state.active, ...(state.finale ? active.stems.filter((s) => s.finale).map((s) => s.id) : [])])].sort((a, b) => a - b), /* during the finale the gong counts as on */
@@ -231,10 +258,16 @@ function snapshot() {
     pending: pendingSnapshot(),
     plays: playsSnapshot(),
     engine: !!(engineSocket && engineSocket.readyState === 1),
-    clients,
+    clients, simClients,
   };
 }
 
+const toMonitors = (obj) => { const s = JSON.stringify(obj); for (const ws of wss.clients) if (ws.role === 'monitor') send(ws, s); };
+const lastXYAct = new Map(); // "cid:stem" -> ms, so pad movement reaches the monitor a few times a second, not 60
+/* What happened, for the rehearsal monitor: who (a phone, a simulated person, the engine page, HTTP) did what. */
+function act(source, sender, kind, extra) {
+  toMonitors({ type: 'act', t: Date.now(), kind, who: source === 'client' && sender ? sender.cid : source, name: sender && sender.simName || null, source, ...extra });
+}
 function send(ws, msg) { if (ws.readyState === 1) ws.send(typeof msg === 'string' ? msg : JSON.stringify(msg)); }
 function broadcast(msg) { const s = JSON.stringify(msg); for (const ws of wss.clients) send(ws, s); }
 function broadcastState() { broadcast(snapshot()); }
@@ -255,7 +288,7 @@ function handleInput(msg, source, sender) {
     case 'pack': { // switch sample pack (engine / sensor / HTTP only; audience phones can't send this)
       const next = packList.find((p) => p.id === String(msg.id));
       if (!next || !next.playable) return;
-      if (next.id !== active.id || msg.reload) setActive(next, source);
+      if (next.id !== active.id || msg.reload) { setActive(next, source); act(source, sender, 'pack', { pack: next.id }); }
       return;
     }
     case 'toggle': {
@@ -300,6 +333,7 @@ function handleInput(msg, source, sender) {
         limited = c.x !== xy.x || c.y !== xy.y || c.v !== xy.v; xy = c;
       }
       state.xy[id] = xy;
+      { const k = (sender ? sender.cid : source) + ':' + id, now = Date.now(); if (now - (lastXYAct.get(k) || 0) > 400) { lastXYAct.set(k, now); act(source, sender, 'xy', { stem: id, ...xy }); } }
       const out = JSON.stringify({ type: 'xy', stem: id, ...xy });
       for (const ws of wss.clients) if (ws !== sender || limited) send(ws, out);
       return;
@@ -307,6 +341,7 @@ function handleInput(msg, source, sender) {
     default:
       return;
   }
+  if (['toggle', 'set', 'stopAll', 'newShow'].includes(msg.type)) act(source, sender, msg.type, { stem: msg.stem != null ? Number(msg.stem) : null, on: msg.stem != null ? state.active.has(Number(msg.stem)) : null, pending: msg.stem != null && pendingTaps.has(Number(msg.stem)) });
   log(`${source} ${msg.type}${msg.stem != null ? ' ' + msg.stem : ''}${msg.name ? ' ' + msg.name + '=' + msg.value : ''} -> active [${[...state.active].join(',')}]`);
   broadcastState();
 }
@@ -327,7 +362,8 @@ function claimEngine(ws) {
 wss.on('connection', (ws, req) => {
   const url = new URL(req.url, 'http://x');
   ws.role = url.searchParams.get('role') === 'engine' ? 'engine'
-    : url.searchParams.get('role') === 'sensor' ? 'sensor' : 'client';
+    : url.searchParams.get('role') === 'sensor' ? 'sensor' : url.searchParams.get('role') === 'monitor' ? 'monitor' : 'client';
+  if (ws.role === 'client' && url.searchParams.get('sim') && isLoopback(req)) ws.simName = String(url.searchParams.get('sim')).slice(0, 20); /* a simulated person (only this machine can say so) */
   ws.isAlive = true;
   ws.cid = Math.random().toString(36).slice(2, 10); // identifies this participant for group rules
   ws.on('pong', () => { ws.isAlive = true; });
@@ -335,15 +371,17 @@ wss.on('connection', (ws, req) => {
     log(`${ws.role} rejected: bad or missing engine key`);
     return ws.close(4001, 'engine key required');
   }
+  if (ws.role === 'monitor' && !adminOk(req, url.searchParams.get('key'))) { log('monitor rejected: not from this machine and no key'); return ws.close(4003, 'operator only'); }
 
   ws.standby = ws.role === 'engine' && url.searchParams.get('standby') === '1';
   if (ws.role === 'engine' && ws.standby) {
     log('engine page opened (standby: it becomes the engine when Start is pressed)'); // opening the page must not silence a running engine
   } else if (ws.role === 'engine') {
     claimEngine(ws);
-  } else {
+  } else if (!ws.simName) {
     log(`${ws.role} connected (${req.socket.remoteAddress})`);
   }
+  if (ws.role === 'client') act('client', ws, 'join', {});
 
   send(ws, { type: 'config', ...publicConfig() });
   broadcastState();
@@ -360,6 +398,7 @@ wss.on('connection', (ws, req) => {
       else handleInput(msg, 'engine', ws);
       return;
     }
+    if (ws.role === 'monitor') return; // the monitor only watches
     // Audience phones may only toggle stems and move XY pads.
     if (ws.role === 'client' && msg.type !== 'toggle' && msg.type !== 'xy') return;
     handleInput(msg, ws.role, ws);
@@ -367,9 +406,16 @@ wss.on('connection', (ws, req) => {
 
   ws.on('close', () => {
     if (ws === engineSocket) { engineSocket = null; state.playing.clear(); log('engine disconnected'); }
+    if (ws.role === 'client') act('client', ws, 'leave', {});
     broadcastState();
   });
 });
+
+// The audience simulator (see lib/sim.js). Its status goes to the rehearsal monitors when it changes and once a second while it runs.
+const sim = new Sim({ url: `ws://127.0.0.1:${PORT}/ws` });
+const pushSim = () => toMonitors({ type: 'sim', status: sim.status() });
+sim.on('status', pushSim);
+setInterval(() => { if (sim.running) pushSim(); }, 1000);
 
 // Heartbeat: drop dead phones so client counts stay honest.
 setInterval(() => {
@@ -406,6 +452,7 @@ server.listen(PORT, () => {
   if (ENGINE_KEY) console.log('  ENGINE_KEY is set: open the engine as /engine?key=…');
   console.log('\n  RESONANCE · Fangzhang 方丈 (server)');
   console.log(`  Dantian 丹田 (engine; open on the machine wired to the PA): http://localhost:${PORT}/engine`);
+  console.log(`  Rehearsal monitor and audience simulator (this machine only${ENGINE_KEY ? ', or with the key' : ''}): http://localhost:${PORT}/rehearsal${ENGINE_KEY ? '?key=…' : ''}`);
   console.log('  Daqian 大千 (audience phones, same Wi-Fi):');
   for (const u of lanUrls()) console.log('    ' + u);
   console.log('');

@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>RESONANCE · Microcosm effect box</title>
+<style>
+  :root { --bg:#0a0c14; --panel:#121626; --line:#232a40; --text:#e6e9f2; --muted:#8a93ad; --accent:#7fb3ff; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:15px/1.45 system-ui,-apple-system,Segoe UI,sans-serif; padding:20px 16px 48px; max-width:760px; margin-inline:auto; }
+  h1 { font-size:13px; letter-spacing:.35em; font-weight:600; margin:0 0 4px; } p.sub { color:var(--muted); margin:0 0 18px; }
+  button { font:inherit; color:var(--text); background:#1b2136; border:1px solid var(--line); border-radius:8px; padding:9px 12px; cursor:pointer; }
+  button:hover { border-color:#3a4566; } button.on { border-color:var(--accent); background:#18284a; }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:14px; margin-bottom:14px; }
+  .label { color:var(--muted); font-size:12px; text-transform:uppercase; letter-spacing:.08em; }
+  .presets { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin-top:8px; } .presets button b { display:block; } .presets button small { color:var(--muted); font-size:11px; }
+  .knobs { display:grid; grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); gap:14px; margin-top:10px; } .knobs input { width:100%; }
+  #blurb { color:var(--muted); margin:10px 0 0; min-height:2.8em; }
+  .row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+  #status { color:var(--muted); font-size:13px; }
+  @media (max-width:520px) { .presets { grid-template-columns:repeat(2,1fr); } }
+</style></head>
+<body>
+<h1>MICROCOSM EFFECT BOX</h1>
+<p class="sub">A granular effect in the spirit of the Hologram Microcosm. This page plays a short loop of the RESONANCE Arp, Bells and Melody through it so you can audition the eight presets.</p>
+
+<div class="card">
+  <div class="row"><button id="go">Start sound</button><button id="fx" class="on" disabled>Effect on</button><span id="status">Press Start to render the demo loop.</span></div>
+  <div class="row" style="margin-top:12px">
+    <label class="label">Source</label>
+    <label><input type="checkbox" id="sArp" checked> Arp</label><label><input type="checkbox" id="sBells" checked> Bells</label><label><input type="checkbox" id="sMel"> Melody</label>
+    <label class="label" style="margin-left:auto">Tempo <span id="bpmV">90</span></label><input id="bpm" type="range" min="60" max="120" value="90" style="width:140px">
+  </div>
+</div>
+
+<div class="card">
+  <div class="label">Preset</div>
+  <div class="presets" id="presets"></div>
+  <p id="blurb"></p>
+  <div class="knobs" id="knobs"></div>
+  <div class="knobs" style="margin-top:12px"><label><span class="label">Dry level <span id="dryV"></span></span><input id="dry" type="range" min="0" max="1" step="0.01" value="0.8"></label></div>
+</div>
+
+<script src="synth.js"></script>
+<script src="microcosm.js"></script>
+<script>
+(async function () {
+  const $ = (s) => document.querySelector(s);
+  const KN = [['activity', 'Activity', 'how many grains / how fast'], ['size', 'Size', 'grain and loop length'], ['repeats', 'Repeats', 'feedback'], ['tone', 'Tone', 'filter'], ['mix', 'Mix', 'wet level']];
+  let ctx, fx, dry, src = [], buffers = {}, current = 'mosaic';
+  const status = (t) => { $('#status').textContent = t; };
+  /* UI */
+  for (const id of ResonanceMicro.ORDER) {
+    const P = ResonanceMicro.PRESETS[id], b = document.createElement('button'); b.dataset.id = id; b.innerHTML = `<b>${P.label}</b><small>${P.family}</small>`;
+    b.onclick = () => pick(id); $('#presets').appendChild(b);
+  }
+  for (const [k, name, hint] of KN) {
+    const l = document.createElement('label'); l.innerHTML = `<span class="label" title="${hint}">${name} <span id="v_${k}"></span></span><input type="range" id="k_${k}" min="0" max="1" step="0.01">`;
+    $('#knobs').appendChild(l); l.querySelector('input').oninput = (e) => { if (fx) fx.set(k, +e.target.value); show(); };
+  }
+  const show = () => { for (const [k] of KN) { const v = fx ? fx.knobs[k] : 0.5; $('#k_' + k).value = v; $('#v_' + k).textContent = Math.round(v * 100); } $('#dryV').textContent = Math.round($('#dry').value * 100); };
+  const pick = (id) => {
+    current = id; document.querySelectorAll('.presets button').forEach((b) => b.classList.toggle('on', b.dataset.id === id));
+    $('#blurb').textContent = ResonanceMicro.PRESETS[id].blurb; if (fx) fx.setPreset(id); show();
+  };
+  pick('mosaic');
+  $('#dry').oninput = () => { if (dry) dry.gain.value = +$('#dry').value; show(); };
+  $('#bpm').oninput = (e) => { $('#bpmV').textContent = e.target.value; };
+  $('#bpm').onchange = () => { if (ctx) restart(); };
+  for (const id of ['sArp', 'sBells', 'sMel']) $('#' + id).onchange = () => { if (ctx) restart(); };
+  $('#fx').onclick = () => { if (!fx) return; fx.setEnabled(!fx.enabled); $('#fx').classList.toggle('on', fx.enabled); $('#fx').textContent = fx.enabled ? 'Effect on' : 'Effect off'; };
+
+  async function render() {
+    const tempo = +$('#bpm').value, want = [['sArp', 'arp', {}], ['sBells', 'bells', {}], ['sMel', 'melody', { style: 'lyrical' }]].filter(([c]) => $('#' + c).checked);
+    status('Rendering the demo loop…'); const out = [];
+    for (const [, synth, extra] of want) out.push(await ResonanceSynth.renderStem({ synth, id: 'demo', sampleRate: ctx.sampleRate, tempo, beatsPerBar: 4, bars: 8, key: 'D', mode: 'minor', progression: 'ambient', seed: 5, ...extra }));
+    return out;
+  }
+  function play(bufs) {
+    src.forEach((s) => { try { s.stop(); } catch {} }); src = [];
+    for (const b of bufs) { const s = ctx.createBufferSource(); s.buffer = b; s.loop = true; s.connect(dry); s.connect(fx.input); s.start(); src.push(s); }
+  }
+  async function restart() { if (!$('#sArp').checked && !$('#sBells').checked && !$('#sMel').checked) { src.forEach((s) => s.stop()); src = []; return; } const bufs = await render(); fx.setTempo(+$('#bpm').value); play(bufs); status('Playing. Try the presets and knobs.'); }
+  $('#go').onclick = async () => {
+    if (ctx) return;
+    $('#go').disabled = true;
+    ctx = new (window.AudioContext || window.webkitAudioContext)(); await ctx.resume();
+    fx = await ResonanceMicro.create(ctx); dry = ctx.createGain(); dry.gain.value = +$('#dry').value;
+    dry.connect(ctx.destination); fx.output.connect(ctx.destination);
+    fx.setPreset(current); fx.setEnabled(true); $('#fx').disabled = false; show(); await restart();
+    $('#go').textContent = 'Playing';
+  };
+})();
+</script>
+</body></html>

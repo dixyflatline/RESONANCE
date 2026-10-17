@@ -122,6 +122,7 @@
   }
   /* BPM slider: readout + estimate follow the drag; the new tempo is rendered and swapped in when the slider is released (latest value wins if a render is already running) */
   let bpmBusy = false;
+  let stale = false, freshening = null; /* stale: the tempo changed while nothing was playing, so the rendered stems still have the old tempo; they are rendered at the new one when the first stem is wanted */
   const showBpm = () => {
     const t = Number($('#bpm').value), now = cfg.tempo;
     $('#bpmVal').textContent = t; $('#bpmNow').textContent = now; $('#bpmTgt').hidden = t === now;
@@ -145,6 +146,10 @@
       let v;
       while ((v = Number($('#bpm').value)) !== cfg.tempo) {
         if (!started) { toast('bpm', 'ok', `✓ ${v} BPM will be used when the engine starts`); cfg.tempo = v; tempoOverride = v; $('#tempo').textContent = `${v} BPM · ${cfg.beatsPerBar}/4`; break; }
+        if (!anyVoice() && !rendering && !switching) { /* nothing is playing: no ramp to hide and nothing to render yet; take the target now and render the stems when the first one is wanted */
+          cfg.tempo = v; tempoOverride = v; stale = true; lastBeat = -1; $('#tempo').textContent = `${v} BPM · ${cfg.beatsPerBar}/4`;
+          toast('bpm', 'ok', `✓ ${v} BPM: the stems are rendered at it when the first one starts`); break;
+        }
         while (rendering || switching) await sleep(200);
         const step = (Math.abs(v - cfg.tempo) <= GLIDE || !anyVoice()) ? v : cfg.tempo + Math.sign(v - cfg.tempo) * GLIDE; /* nothing playing: no glide to hide, go straight to the target */
         if (!(await regenerate(step, step === v ? `Tempo ${v} BPM` : `Tempo → ${step} of ${v} BPM`, false))) break;
@@ -205,6 +210,25 @@
     renderRows();
   }
 
+  // ---------------- Microcosm effect box ----------------
+  let micro = null;
+  function initMicroUI() {
+    const sel = $('#microPreset'), KN = ['activity', 'size', 'repeats', 'tone', 'mix'];
+    let saved = {}; try { saved = JSON.parse(localStorage.getItem('resonance.micro') || '{}'); } catch { /* storage unavailable */ }
+    const keep = () => { try { localStorage.setItem('resonance.micro', JSON.stringify({ preset: micro.preset, on: micro.enabled, knobs: micro.knobs })); } catch { /* storage unavailable */ } };
+    const show = () => { for (const k of KN) { $('#mk_' + k).value = micro.knobs[k]; $('#mv_' + k).textContent = Math.round(micro.knobs[k] * 100); } $('#microBlurb').textContent = ResonanceMicro.PRESETS[micro.preset].blurb; sel.value = micro.preset; };
+    const power = (on) => { micro.setEnabled(on); const b = $('#microOn'); b.textContent = on ? 'On' : 'Off'; b.setAttribute('aria-pressed', String(on)); };
+    if (!sel.options.length) {
+      for (const id of ResonanceMicro.ORDER) sel.add(new Option(`${ResonanceMicro.PRESETS[id].label} (${ResonanceMicro.PRESETS[id].family})`, id));
+      sel.addEventListener('change', () => { micro.setPreset(sel.value); show(); keep(); });
+      for (const k of KN) $('#mk_' + k).addEventListener('input', (e) => { micro.set(k, Number(e.target.value)); show(); keep(); });
+      $('#microOn').addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); power(!micro.enabled); keep(); }); /* (inside <summary>: don't also fold the box) */
+    }
+    if (saved.preset && ResonanceMicro.PRESETS[saved.preset]) { micro.setPreset(saved.preset, true); for (const k of KN) if (typeof saved.knobs?.[k] === 'number') micro.set(k, saved.knobs[k]); }
+    micro.setTempo(cfg.tempo); power(!!saved.on); show();
+    setInterval(() => micro && micro.setTempo(cfg.tempo), 500); /* the stepped presets follow the tempo, including its glide */
+  }
+
   // ---------------- Audio setup ----------------
   async function start() {
     ctx = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: 'interactive' });
@@ -216,10 +240,15 @@
     comp.threshold.value = -14; comp.ratio.value = 3; comp.attack.value = 0.02; comp.release.value = 0.3;
     analyserMaster = ctx.createAnalyser(); analyserMaster.fftSize = 2048;
     master.connect(brightness).connect(comp).connect(analyserMaster).connect(ctx.destination);
+    try { /* the Microcosm effect box: a wet-only send taken after the brightness filter, returned just before the compressor */
+      micro = await ResonanceMicro.create(ctx);
+      brightness.connect(micro.input); micro.output.connect(comp);
+      initMicroUI();
+    } catch (e) { console.warn('Microcosm effect box unavailable', e); $('#micro').hidden = true; }
 
     createStemNodes();
     setBuffers(await loadAll());
-    t0 = ctx.currentTime + 0.1;
+    stale = false; t0 = ctx.currentTime + 0.1;
     started = true; showSong();
     $('#gate').hidden = true;
     setInterval(clockLoop, 15);
@@ -262,7 +291,7 @@
         key = custom ? key : (cfg.key || 'D'); seed = cfg.seed ?? 1; $('#key').value = key;
         createStemNodes();
         setBuffers(await loadAll());
-        t0 = ctx.currentTime + 0.1; lastBeat = -1; lastPlayingSent = '';
+        stale = false; t0 = ctx.currentTime + 0.1; lastBeat = -1; lastPlayingSent = '';
       }
     } finally { switching = false; }
     reconcile(); renderRows();
@@ -412,7 +441,23 @@
   }
 
   // Make actual playback match the desired set, on the next boundary.
+  function freshen() { /* render every stem at the current tempo (once), for the first stem started after a tempo change with nothing playing */
+    if (freshening) return freshening;
+    freshening = (async () => {
+      while (rendering || switching) await sleep(200);
+      progressHook = (d, n) => toast('bpm', 'work', `Rendering at ${cfg.tempo} BPM… ${d}/${n}`);
+      toast('bpm', 'work', `Rendering at ${cfg.tempo} BPM…`);
+      let tempo;
+      try { do { tempo = cfg.tempo; setBuffers(await loadAll(tempo)); } while (tempo !== cfg.tempo); } /* the target moved while rendering: render again */
+      catch (err) { toast('bpm', 'err', `Render failed: ${err.message}`); return; }
+      finally { progressHook = null; }
+      stale = false; t0 = ctx.currentTime + 0.1; lastBeat = -1; if (runStart !== null) runStart = null;
+      toast('bpm', 'ok', `✓ ${cfg.tempo} BPM ready`);
+    })().finally(() => { freshening = null; });
+    return freshening;
+  }
   function reconcile() {
+    if (stale) { if (desired.size) freshen().then(() => { if (!stale) reconcile(); }); return; }
     const when = nextBoundary();
     const leaving = [];
     for (const [id, st] of stems) {
@@ -515,7 +560,8 @@
     try { results = await loadAll(newTempo); }
     catch (err) { progressHook = null; toast('regen', 'err', `${what} failed: ${err.message}`); btnState(bar, orig, 'err'); $('#regen').disabled = false; $('#applyBpm').disabled = false; $('#key').disabled = false; return false; }
     progressHook = null;
-    const retime = newTempo !== cfg.tempo;
+    const retime = newTempo !== cfg.tempo || stale;
+    stale = false;
     const when = retime && !anyVoice() ? ctx.currentTime + 0.05 : nextBoundary(barLen()); /* bar boundary on the current grid, or right now when a tempo change finds nothing playing */
     if (retime) { t0 = when; cfg.tempo = newTempo; tempoOverride = newTempo; lastBeat = -1; if (runStart !== null) runStart = when; }
     let swapped = 0;

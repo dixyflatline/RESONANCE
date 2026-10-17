@@ -17,6 +17,10 @@
   #urls a { color:var(--accent); font-family:ui-monospace,Menlo,monospace; font-size:13px; }
   #conn.ok { color:#6fd39b; } #conn.bad { color:#ef8a7a; }
   select, input[type=range] { width:100%; }
+  .fxbox { border:1px solid var(--line); border-radius:10px; padding:8px 10px; display:flex; flex-direction:column; gap:8px; } .fxbox[open] { gap:10px; }
+  .fxbox summary { display:flex; justify-content:space-between; align-items:center; cursor:pointer; list-style:none; } .fxbox summary::-webkit-details-marker { display:none; }
+  .fxbox summary button { padding:3px 12px; } .fxbox summary button[aria-pressed=true] { border-color:var(--accent); background:#18284a; }
+  .fxbox > select, .fxbox > .grid2, .fxbox > label { margin-top:8px; } .fxblurb { color:var(--muted); font-size:12px; margin-top:6px; min-height:2.6em; }
   select { background:#0d1020; color:var(--text); border:1px solid var(--line); border-radius:6px; padding:6px; }
   button { font:inherit; color:var(--text); background:#1b2136; border:1px solid var(--line); border-radius:8px; padding:8px 10px; cursor:pointer; }
   button:hover { border-color:#3a4566; }
@@ -133,6 +137,7 @@
   <section><div class="label dh">Fangzhang 方丈 · server</div>
   <div id="srvBig" class="ok"><i></i><div><b id="srvState">Checking…</b><div id="srvDetail" class="muted"></div></div></div>
   <div id="srv"><span id="srvInfo">…</span><button id="restartBtn" title="Stops and starts the server (needs npm start)">Restart server</button></div>
+  <a href="/rehearsal" target="_blank" rel="noopener" style="color:var(--accent);font-size:13px" title="Simulated audience and a live monitor. Works only on the machine that runs the server.">Rehearsal: simulated audience &amp; monitor ↗</a>
   </section>
 </nav>
 <div id="toasts" aria-live="polite"></div>
@@ -182,6 +187,16 @@
     <label><span class="label">Fade in <span id="fadeInVal"></span></span><input id="fadeIn" type="range" min="0.5" max="16" step="0.5" value="4"></label>
     <label><span class="label">Fade out <span id="fadeOutVal"></span></span><input id="fadeOut" type="range" min="0.5" max="16" step="0.5" value="4"></label>
   </div>
+  <details id="micro" class="fxbox">
+    <summary><span class="label">Microcosm effect box</span> <button id="microOn" type="button" aria-pressed="false">Off</button></summary>
+    <select id="microPreset" aria-label="Effect preset"></select>
+    <div id="microBlurb" class="fxblurb"></div>
+    <div class="grid2"><label><span class="label">Activity <span id="mv_activity"></span></span><input id="mk_activity" type="range" min="0" max="1" step="0.01"></label>
+    <label><span class="label">Size <span id="mv_size"></span></span><input id="mk_size" type="range" min="0" max="1" step="0.01"></label>
+    <label><span class="label">Repeats <span id="mv_repeats"></span></span><input id="mk_repeats" type="range" min="0" max="1" step="0.01"></label>
+    <label><span class="label">Tone <span id="mv_tone"></span></span><input id="mk_tone" type="range" min="0" max="1" step="0.01"></label></div>
+    <label><span class="label">Mix <span id="mv_mix"></span></span><input id="mk_mix" type="range" min="0" max="1" step="0.01"></label>
+  </details>
   <label><span class="label">Brightness (sensor-ready param)</span><input id="bright" type="range" min="0" max="1" step="0.01" value="0.85"></label>
   <label><span class="label">Master volume</span><input id="vol" type="range" min="0" max="1.2" step="0.01" value="0.9"></label>
   <button id="export" title="Download the generated stems as WAV loops">Export WAVs</button>
@@ -216,6 +231,7 @@
 </div>
 <script src="xy.js"></script>
 <script src="synth.js"></script>
+<script src="microcosm.js"></script>
 <script src="musicxml.js"></script>
 <script src="vendor/qrcode.js"></script>
 <script src="engine.js"></script>

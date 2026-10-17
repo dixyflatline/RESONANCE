@@ -484,9 +484,9 @@
     return out;
   }
 
-  function pluck(ctx, dest, { t, freq, gain = 0.2, decay = 1.2, type = 'triangle', pan = 0 }) {
+  function pluck(ctx, dest, { t, freq, gain = 0.2, decay = 1.2, type = 'triangle', pan = 0, attack = 0.006 }) {
     const g = ctx.createGain();
-    g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(gain, t + 0.006);
+    g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(gain, t + attack);
     g.gain.exponentialRampToValueAtTime(0.0001, t + decay);
     const p = ctx.createStereoPanner(); p.pan.value = pan;
     const o = ctx.createOscillator(); o.type = type; o.frequency.value = freq;
@@ -496,18 +496,27 @@
     o.start(t); o2.start(t); o.stop(t + decay + 0.05); o2.stop(t + decay + 0.05);
   }
 
-  function bell(ctx, dest, { t, freq, gain = 0.15, decay = 5, pan = 0 }) {
+  function bell(ctx, dest, { t, freq, gain = 0.15, decay = 5, pan = 0, attack = 0.004 }) {
     const car = ctx.createOscillator(); car.frequency.value = freq;
     const mod = ctx.createOscillator(); mod.frequency.value = freq * 3.5;
     const mg = ctx.createGain();
     mg.gain.setValueAtTime(freq * 2.2, t); mg.gain.exponentialRampToValueAtTime(freq * 0.05, t + decay * 0.6);
     mod.connect(mg).connect(car.frequency);
     const g = ctx.createGain();
-    g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(gain, t + 0.004);
+    g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(gain, t + attack);
     g.gain.exponentialRampToValueAtTime(0.0001, t + decay);
     const p = ctx.createStereoPanner(); p.pan.value = pan;
     car.connect(g).connect(p).connect(dest);
     car.start(t); mod.start(t); car.stop(t + decay + 0.05); mod.stop(t + decay + 0.05);
+  }
+
+  /* Gate length by complexity (arp, bells). A note of complexity level lv sounds as a short body in its own layer; layers 1 and 2 add a longer tail
+     of the same pitch with a soft attack, so the higher the complexity, the longer the note rings before it is cut off. D = the ring time (decay) of the body, of tail 1 and of tail 2.
+     Tail j lives in layer max(j, lv). play(decay, gainMultiplier, attack) makes one sound. */
+  const TAIL_GAIN = [1, 0.6, 0.5];
+  function gated(m, lv, D, play) {
+    if (m.want(lv)) play(D[0], 1, undefined);
+    for (const j of [1, 2]) if (m.want(Math.max(j, lv))) play(D[j], TAIL_GAIN[j], 0.04);
   }
 
   function thump(ctx, dest, { t, gain = 0.6, f0 = 95, f1 = 42, decay = 0.45 }) {
@@ -676,12 +685,14 @@
       const n1 = planLongNotes({ ...m, rnd: m.rndT }, cfg1); lastLongPlan = saved;
       voice(n1, acid ? -0.25 : 0.25, acid ? 0.05 : 0.065);
     }
-    if (m.want(2)) pluckedMelody(ctx, out, verb, { ...m, rnd: m.rndT, want: () => true }, 'lyrical', 0.55); /* every note of this line belongs to layer 2 */
+    /* A plucked line in the gaps, the same notes in every layer: its 12 strongest notes belong to layer 1 and the next 16 to layer 2.
+       With layer 0 (the long notes) and layer 1's second line, that is about 4 / 16 / 32 notes per 8 bars at the sparse / medium / complex settings. */
+    if (m.want(1) || m.want(2)) pluckedMelody(ctx, out, verb, { ...m, rnd: m.mkRnd() }, 'dense', 0.6, { n1: 12, n2: 16 });
   }
 
   /* The note-by-note melody (every style except glide and acid). Complexity: strong beats and phrase ends in layer 0, the other beats in layer 1, the off-beats in layer 2.
      gainMul lets the long leads reuse it as a quiet ornament layer. */
-  function pluckedMelody(ctx, out, verb, m, styleKey, gainMul) {
+  function pluckedMelody(ctx, out, verb, m, styleKey, gainMul, ranked = null) {
     // Four characters to choose from. pOn/pOff: chance of a note on a beat / off-beat; hold: extra chance after a long gap;
     // step: how far each note may move (in scale steps); oct: octave shift; decay: ring time; echo: delay level.
     const STYLES = { // ('glide' and 'acid' are handled by longMelody)
@@ -689,6 +700,7 @@
       flowing: { pOn: 0.65, pOff: 0.5, hold: 0.0, step: 3.0, oct: 0, type: 'triangle', decay: 0.5, echo: 0.2 },
       leaping: { pOn: 0.42, pOff: 0.22, hold: 0.3, step: 8.0, oct: 0, type: 'triangle', decay: 0.7, echo: 0.3 },
       bright: { pOn: 0.22, pOff: 0.05, hold: 0.6, step: 4.0, oct: 12, type: 'sine', decay: 1.8, echo: 0.4 },
+      dense: { pOn: 0.99, pOff: 0.4, hold: 0.0, step: 3.0, oct: 0, type: 'triangle', decay: 0.9, echo: 0.28 }, // a note on almost every beat; used only for the complexity layers of the long leads
     };
     const st = STYLES[styleKey] || { pOn: 0.38, pOff: 0.16, hold: 0.4, step: 4.4, oct: 0, type: 'triangle', decay: 0.8, echo: 0.28 };
     const bus = ctx.createGain(); bus.connect(out); bus.connect(verb.in(0.9));
@@ -703,6 +715,7 @@
     const isTone = (n, chord) => pcs(chord).includes(((n - m.root) % 12 + 12) % 12);
     const nearest = (n, pred) => pool.filter(pred).sort((a, b) => Math.abs(a - n) - Math.abs(b - n))[0] ?? n;
     let cur = nearest(m.root + mb + 7, (n) => isTone(n, m.prog[0]));
+    const evs = []; /* every note of the line, so the layers can be assigned once the whole line is known */
     m.forProg((chord, t0, seg, i, cnt) => {
       if (m.ambient) { const ok = poolAll.filter((n) => m.plan.okAbove(n + st.oct, i)); /* st.oct: the 'bright' style plays an octave up */ pool = ok.length ? ok : poolAll; } // notes that fit under this chord's pad/atmos/bass
       const next = m.prog[(i + 1) % cnt], last = !m.ambient && i === cnt - 1, slots = Math.round(seg / (m.beat / 2));
@@ -721,9 +734,13 @@
         else if (strong || k === 0) n = nearest(n, (x) => isTone(x, chord));
         cur = n;
         const dur = ((onsets[k + 1] ?? slots) - s) * m.beat / 2, pan = (m.rnd() - 0.5) * 0.4;
-        if (m.want(lv)) pluck(ctx, bus, { t: t0 + s * m.beat / 2, freq: mtof(n + st.oct), gain: (strong ? 0.32 : 0.25) * (st.oct ? 0.75 : 1) * gainMul, decay: Math.min(3, st.decay + dur), type: st.type, pan });
+        evs.push({ lv, key: ranked ? m.rnd() : 0, first: strong || final ? 0 : 1, t: t0 + s * m.beat / 2, freq: mtof(n + st.oct), gain: (strong ? 0.32 : 0.25) * (st.oct ? 0.75 : 1) * gainMul, decay: Math.min(3, st.decay + dur), type: st.type, pan });
       });
     });
+    if (ranked) { /* strong beats and phrase ends first, then the rest in a fixed random order: the first n1 are layer 1, the next n2 layer 2 */
+      [...evs].sort((a, b) => a.first - b.first || a.key - b.key).forEach((e, k) => { e.lv = k < ranked.n1 ? 1 : k < ranked.n1 + ranked.n2 ? 2 : -1; });
+    }
+    for (const e of evs) if (e.lv >= 0 && m.want(e.lv)) pluck(ctx, bus, { t: e.t, freq: e.freq, gain: e.gain, decay: e.decay, type: e.type, pan: e.pan });
   }
 
   // ---------- stems ----------
@@ -832,8 +849,19 @@
           const og = ctx.createGain(); og.gain.value = lv; o.connect(og).connect(g); o.start(t); o.stop(end + r + 0.1);
         });
       };
-      /* Complexity: layer 0 is one long note per chord, layer 1 the extra leap or scoop of the chord, layer 2 a soft pluck on every bar line. */
-      if (strict) { if (m.want(0)) for (let b = 0; b < nBars; b++) note(b * m.bar, m.bar, m.plan.sub[b % m.plan.sub.length], { attack: 0.35, release: 0.35 }); return; }
+      /* Complexity: layer 0 is one long note per chord (the original sound). Layers 1 and 2 make the bass pulse on the bar's root:
+         layer 1 a soft pulse on every beat (quarter notes), layer 2 the pulses in between (eighth notes). The pulses are short, with a touch of the octave above so they carry on small speakers. */
+      const extras = () => {
+        for (let b = 0; b < nBars; b++) {
+          const root = m.plan.sub[b % m.plan.sub.length], t0 = b * m.bar;
+          for (let k = 0; k < m.bpb; k++) {
+            const acc = k === 0 ? 1 : 0.8;
+            if (m.want(1)) { pluck(ctx, f, { t: t0 + k * B, freq: mtof(root), gain: 0.7 * acc, decay: 0.55, type: 'sine' }); pluck(ctx, f, { t: t0 + k * B, freq: mtof(root + 12), gain: 0.25 * acc, decay: 0.35, type: 'sine' }); }
+            if (m.want(2)) { pluck(ctx, f, { t: t0 + (k + 0.5) * B, freq: mtof(root), gain: 0.5, decay: 0.35, type: 'sine' }); pluck(ctx, f, { t: t0 + (k + 0.5) * B, freq: mtof(root + 12), gain: 0.18, decay: 0.25, type: 'sine' }); }
+          }
+        }
+      };
+      if (strict) { if (m.want(0)) for (let b = 0; b < nBars; b++) note(b * m.bar, m.bar, m.plan.sub[b % m.plan.sub.length], { attack: 0.35, release: 0.35 }); extras(); return; }
       for (let c = 0; c < Math.round(m.L / (B * m.plan.chordBeats)); c++) f.frequency.setValueAtTime(150 + m.rnd() * 110, c * B * m.plan.chordBeats);
       const cycle = (m.plan.cycleBeats ?? m.plan.chordBeats * 4) * B;
       for (let rep = 0; rep * cycle < m.L - 1e-6; rep++) {
@@ -841,11 +869,11 @@
         for (const e of m.plan.subEv) {
           const w = Math.floor(e.t / m.plan.chordBeats), lv = Math.min(2, seen[w] = (seen[w] ?? -1) + 1); /* the 1st, 2nd and later note of its chord */
           const attack = 0.9 + m.rnd() * 0.8, release = 1.4 + m.rnd() * 1.0;
-          if (lv === 2 ? !m.want(1) : !m.want(lv)) continue;
+          if (lv > 0 || !m.want(0)) continue; /* the leap and the scoop are no longer part of any layer: the bass pulses instead (see extras) */
           note(rep * cycle + e.t * B, e.d * B, e.n, { attack, release, from: e.from ?? null, slideSec: (e.sb || 0) * B });
         }
       }
-      if (m.want(2)) for (let b = 0; b < nBars; b++) pluck(ctx, f, { t: b * m.bar, freq: mtof(m.plan.sub[b % m.plan.sub.length]), gain: 0.3, decay: 1.6, type: 'sine' });
+      extras();
     },
 
     arp(ctx, out, verb, m) {
@@ -865,8 +893,8 @@
         for (let s = 0; s < steps; s++) {
           const skip = m.rnd() < 0.18, g = m.rnd(), g16 = m.rnd(), pick = m.rnd(), oct = m.rnd(); /* the same draws in every layer */
           const note = tones[pattern[s % pattern.length] % tones.length], lv = s % 4 === 0 ? 0 : 1;
-          if (m.want(lv) && !(lv > 0 && skip)) pluck(ctx, bus, { t: t0 + s * step, freq: mtof(note), gain: 0.11 + g * 0.07, decay: 1.4, pan: Math.sin(s * 0.9) * 0.5 });
-          if (m.want(2) && pick < 0.55) pluck(ctx, bus, { t: t0 + s * step + step / 2, freq: mtof(tones[pattern[(s + 1) % pattern.length] % tones.length] + (oct < 0.3 ? 12 : 0)), gain: 0.05 + g16 * 0.04, decay: 0.9, pan: Math.sin(s * 0.9 + 1) * 0.5 });
+          if (!(lv > 0 && skip)) gated(m, lv, [0.35, 1.4, 3.2], (decay, mul, attack) => pluck(ctx, bus, { t: t0 + s * step, freq: mtof(note), gain: (0.11 + g * 0.07) * mul, decay, attack, pan: Math.sin(s * 0.9) * 0.5 }));
+          if (pick < 0.55) gated(m, 2, [0.25, 0.9, 2.0], (decay, mul, attack) => pluck(ctx, bus, { t: t0 + s * step + step / 2, freq: mtof(tones[pattern[(s + 1) % pattern.length] % tones.length] + (oct < 0.3 ? 12 : 0)), gain: (0.05 + g16 * 0.04) * mul, decay, attack, pan: Math.sin(s * 0.9 + 1) * 0.5 }));
         }
       });
     },
@@ -906,11 +934,14 @@
           if (m.want(0)) thump(ctx, bus, { t, gain: 0.55, f0: mtof(m.root), f1: mtof(m.root - 12) });
           if (m.want(1)) thump(ctx, bus, { t: t + 0.22, gain: 0.32, f0: mtof(m.root - 5), f1: mtof(m.root - 12), decay: 0.35 });
         }
+        /* more drum voices as the complexity rises: layer 1 a tuned tom on the off-beat after beats 2 and 4, layer 2 another on the last sixteenth of every beat */
+        if (inBar % 2 === 1 && m.want(1)) thump(ctx, bus, { t: t + m.beat / 2, gain: 0.2, f0: mtof(m.root + 7), f1: mtof(m.root - 5), decay: 0.3 });
+        if (m.want(2)) thump(ctx, bus, { t: t + m.beat * 0.75, gain: 0.14, f0: mtof(m.root + (inBar % 2 ? 12 : 10)), f1: mtof(m.root), decay: 0.22 });
         for (let s = 0; s < 4; s++) {
           const acc = s === 2 ? 1 : s === 0 ? 0.5 : 0.3;
           const skip = m.rnd() < 0.12, g = m.rnd(), pn = m.rnd(), off = m.rnd();
           if (skip || !m.want(s % 2 === 0 ? 1 : 2)) continue;
-          noiseHit(ctx, bus, m.noise, { t: t + s * m.beat / 4, gain: 0.035 * acc * (0.7 + g * 0.6), decay: 0.07, hp: 7000, pan: (pn - 0.5) * 0.8, offset: off * 5 });
+          noiseHit(ctx, bus, m.noise, { t: t + s * m.beat / 4, gain: 0.06 * acc * (0.7 + g * 0.6), decay: 0.07, hp: 7000, pan: (pn - 0.5) * 0.8, offset: off * 5 });
         }
         if (inBar === m.bpb - 1) {
           const pickup = m.rnd() < 0.6, off = m.rnd(), ghost = m.rnd() < 0.5;
@@ -921,18 +952,18 @@
     },
 
     bells(ctx, out, verb, m) {
-      /* Complexity: layer 0 is the first bell of each chord, layer 1 the others (the original 1-3), layer 2 three more, softer ones. */
+      /* Complexity: layer 0 is the first bell of each chord (as before), layer 1 three more, layer 2 four more, softer ones:
+         1 / 4 / 8 bells per chord, which is about 4 / 16 / 32 per 8 bars. */
       const bus = ctx.createGain(); bus.connect(out); bus.connect(verb.in(1.1));
       m.forChords((chord, t0, seg, ci) => {
         const tones = chord.map((n) => ((n % 12) + 12) % 12).filter((n) => m.custom || PENTA.includes(n) || m.rnd() < 0.3);
-        const count = 1 + Math.floor(m.rnd() * 3);
-        for (let k = 0; k < count + 3; k++) {
+        m.rnd(); /* (kept: this draw used to choose how many bells, and dropping it would change the first bell) */
+        for (let k = 0; k < 8; k++) {
           const beatPos = Math.floor(m.rnd() * Math.round(seg / m.beat));
           const n = tones[Math.floor(m.rnd() * tones.length)] ?? 0;
-          const half = m.rnd() < 0.3, g = m.rnd(), pn = m.rnd(), lv = k === 0 ? 0 : k < count ? 1 : 2;
-          if (!m.want(lv)) continue;
+          const half = m.rnd() < 0.3, g = m.rnd(), pn = m.rnd(), lv = k === 0 ? 0 : k < 4 ? 1 : 2;
           const bn = m.plan.fit(m.root + (m.custom ? 12 : 24) + n, ci), bt = t0 + beatPos * m.beat + (half ? m.beat / 2 : 0); if (bn === null) continue;
-          bell(ctx, bus, { t: bt, freq: mtof(bn), gain: lv === 2 ? 0.045 + g * 0.035 : 0.07 + g * 0.05, decay: 5, pan: (pn - 0.5) * 1.2 });
+          gated(m, lv, [1.6, 5, 9], (decay, mul, attack) => bell(ctx, bus, { t: bt, freq: mtof(bn), gain: (lv === 2 ? 0.055 + g * 0.04 : 0.07 + g * 0.05) * mul, decay, attack, pan: (pn - 0.5) * 1.2 }));
         }
       });
     },

@@ -1,0 +1,270 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>RESONANCE · Rehearsal</title>
+<style>
+  :root { --bg:#0a0c14; --panel:#121626; --line:#232a40; --text:#e6e9f2; --muted:#8a93ad; --accent:#7fb3ff; --ok:#6fd39b; --bad:#ef8a7a; --warn:#f2c46b; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:14px/1.45 system-ui,-apple-system,Segoe UI,sans-serif; }
+  header { display:flex; flex-wrap:wrap; gap:10px 16px; align-items:center; padding:12px 16px; border-bottom:1px solid var(--line); position:sticky; top:0; background:var(--bg); z-index:5; }
+  h1 { font-size:13px; letter-spacing:.35em; margin:0; font-weight:600; } h1 small { letter-spacing:.08em; color:var(--muted); font-weight:400; margin-left:8px; }
+  .chip { display:inline-flex; gap:6px; align-items:center; background:var(--panel); border:1px solid var(--line); border-radius:999px; padding:3px 11px; font-size:12px; color:var(--muted); white-space:nowrap; }
+  .chip b { color:var(--text); font-weight:600; } .chip i { width:8px; height:8px; border-radius:50%; background:var(--bad); display:inline-block; } .chip.ok i { background:var(--ok); } .chip.warn i { background:var(--warn); }
+  #banner { display:none; flex:1 1 100%; background:#3a2418; border:1px solid #7a4a2c; color:#ffd9b8; border-radius:8px; padding:6px 12px; }
+  main { display:grid; grid-template-columns:minmax(0,1.35fr) minmax(0,1fr); gap:14px; padding:14px 16px 40px; align-items:start; }
+  @media (max-width:980px) { main { grid-template-columns:1fr; } }
+  section { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:12px 14px; min-width:0; }
+  h2 { font-size:12px; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); margin:0 0 10px; font-weight:600; display:flex; justify-content:space-between; align-items:center; gap:8px; }
+  button { font:inherit; color:var(--text); background:#1b2136; border:1px solid var(--line); border-radius:8px; padding:7px 12px; cursor:pointer; } button:hover { border-color:#3a4566; }
+  button.on { border-color:var(--accent); background:#18284a; } button.go { background:#1d3b2c; border-color:#2e6b4b; } button.stop { background:#3a1d22; border-color:#6b2e38; } button.warn { border-color:#7a4a2c; background:#3a2418; }
+  select { background:#0d1020; color:var(--text); border:1px solid var(--line); border-radius:6px; padding:5px; font:inherit; max-width:100%; }
+  .row { display:flex; flex-wrap:wrap; gap:8px; align-items:center; } .muted { color:var(--muted); } small { color:var(--muted); }
+  input[type=range] { width:100%; accent-color:var(--accent); }
+  .col { display:flex; flex-direction:column; gap:14px; min-width:0; }
+  /* people */
+  #bots { display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:8px; }
+  .bot { border:1px solid var(--line); border-left:4px solid var(--c); border-radius:10px; padding:8px 10px; display:flex; flex-direction:column; gap:5px; background:#0f1322; min-width:0; }
+  .bot.off { opacity:.5; } .bot .nm { display:flex; justify-content:space-between; gap:6px; align-items:center; } .bot .nm b { color:var(--c); font-size:15px; }
+  .bot .st { font-size:12px; color:var(--muted); } .bot .st.live { color:var(--ok); } .bot .doing { font-size:12px; min-height:2.4em; overflow-wrap:anywhere; } .bot .cnt { font-size:11px; color:var(--muted); }
+  /* stems */
+  .grp { margin-bottom:12px; } .grp:last-child { margin-bottom:0; }
+  .gh { display:flex; flex-wrap:wrap; justify-content:space-between; gap:4px 10px; margin-bottom:6px; } .gh b { font-size:13px; } .gh span { font-size:12px; color:var(--muted); }
+  .tiles { display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:8px; }
+  .tile { position:relative; border:1px solid var(--line); border-radius:10px; padding:8px 9px 7px; background:#0f1322; display:grid; grid-template-columns:1fr auto; gap:2px 8px; overflow:hidden; }
+  .tile::before { content:""; position:absolute; left:0; top:0; bottom:0; width:4px; background:var(--sc,#555); opacity:.45; }
+  .tile.wanted::before { opacity:1; animation:bl 1s infinite alternate; } .tile.playing::before { opacity:1; box-shadow:0 0 10px var(--sc); } .tile.playing { border-color:var(--sc); }
+  @keyframes bl { to { opacity:.25; } }
+  .tile .n { font-weight:600; font-size:13px; padding-left:4px; } .tile .s { font-size:11px; color:var(--muted); padding-left:4px; grid-column:1; }
+  .tile .s.playing { color:var(--ok); } .tile .s.wanted { color:var(--warn); } .tile .s.pending { color:var(--accent); }
+  .tile .by { font-size:11px; color:var(--muted); padding-left:4px; grid-column:1/3; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-height:1.3em; }
+  .tile .by i { display:inline-block; width:7px; height:7px; border-radius:50%; margin-right:5px; background:var(--bc,#888); }
+  .mini { grid-column:2; grid-row:1/3; display:flex; gap:3px; align-items:stretch; } .mini .pad { position:relative; width:38px; height:38px; border:1px solid var(--line); border-radius:5px; background:#0a0d19; }
+  .mini .pad b { position:absolute; width:7px; height:7px; border-radius:50%; background:var(--accent); transform:translate(-50%,50%); } .mini .pad.nocx { background:repeating-linear-gradient(90deg,#0a0d19 0 4px,#12172a 4px 8px); }
+  .mini .vol { position:relative; width:6px; border:1px solid var(--line); border-radius:3px; background:#0a0d19; overflow:hidden; } .mini .vol b { position:absolute; left:0; right:0; bottom:0; background:var(--accent); opacity:.8; }
+  .tile.flash { animation:fl .9s; } @keyframes fl { 0% { background:#26304f; } 100% { background:#0f1322; } }
+  /* log + chart */
+  #log { max-height:420px; overflow:auto; font-size:12.5px; display:flex; flex-direction:column; gap:2px; }
+  #log div { display:grid; grid-template-columns:54px 70px 1fr; gap:6px; padding:2px 0; border-bottom:1px solid #171c30; } #log .t { color:var(--muted); font-variant-numeric:tabular-nums; } #log .w { font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; } #log .bad { color:var(--bad); } #log .mv { color:var(--muted); }
+  canvas { width:100%; height:90px; display:block; }
+  .legend { display:flex; flex-wrap:wrap; gap:4px 12px; font-size:11px; color:var(--muted); margin-top:6px; } .legend i { display:inline-block; width:8px; height:8px; border-radius:2px; margin-right:4px; }
+  .scen { display:flex; flex-wrap:wrap; gap:6px; } label.ck { display:flex; gap:6px; align-items:center; cursor:pointer; }
+  .note { font-size:12px; color:var(--muted); margin-top:8px; }
+</style></head>
+<body>
+<header>
+  <h1>RESONANCE<small>REHEARSAL</small></h1>
+  <span class="chip" id="cConn"><i></i><b>Server</b></span>
+  <span class="chip" id="cEngine"><i></i><b>Engine</b> <span id="cEngineT">not connected</span></span>
+  <span class="chip">Pack <b id="cPack">–</b></span>
+  <span class="chip">Bar <b id="cBar">–</b> · <b id="cBpm">–</b> BPM</span>
+  <span class="chip">In the room <b id="cPeople">–</b></span>
+  <span class="chip" title="This page and the simulator answer only to the machine the server runs on (or to someone with the engine key)">Operator only</span>
+  <div id="banner"></div>
+</header>
+<main>
+  <div class="col">
+    <section>
+      <h2>Stems <span id="stemSum" class="muted" style="text-transform:none;letter-spacing:0;font-weight:400"></span></h2>
+      <div id="board"><span class="muted">Waiting for the server…</span></div>
+    </section>
+    <section>
+      <h2>Activity <span class="muted" style="text-transform:none;letter-spacing:0;font-weight:400">layers switched on or off, last 3 minutes</span></h2>
+      <canvas id="chart" width="900" height="180"></canvas>
+      <div class="legend" id="legend"></div>
+    </section>
+  </div>
+  <div class="col">
+    <section>
+      <h2>Simulated audience <span id="simState" class="muted" style="text-transform:none;letter-spacing:0;font-weight:400">stopped</span></h2>
+      <div class="row"><button class="go" id="bStart">Start rehearsal</button><button class="stop" id="bStop">Stop</button></div>
+      <div style="margin-top:12px" class="label"><small>Room</small></div>
+      <div class="scen" id="scen" style="margin-top:4px"></div>
+      <div style="margin-top:10px"><small>Activity <b id="actV" style="color:var(--text)"></b> <span id="actEff" class="muted"></span></small><input id="act" type="range" min="0" max="2" step="0.05" value="1"></div>
+      <div class="row" style="margin-top:8px"><label class="ck"><input type="checkbox" id="churn"> People come and go</label><span style="flex:1"></span><button class="warn" id="bGong" title="Three simulated people vote for the gong. If it succeeds, the show ends.">Gong vote now</button></div>
+      <div class="note" id="simNote">These are real connections: they follow the same audience rules as phones (limits, cooldowns, the 3-person gong vote).</div>
+    </section>
+    <section>
+      <h2>People</h2>
+      <div id="bots"></div>
+    </section>
+    <section>
+      <h2>What just happened <label class="ck" style="text-transform:none;letter-spacing:0;font-weight:400"><input type="checkbox" id="showMoves"> pad moves</label></h2>
+      <div id="log"></div>
+    </section>
+  </div>
+</main>
+<script>
+(function () {
+  const $ = (s) => document.querySelector(s), el = (t, c, txt) => { const e = document.createElement(t); if (c) e.className = c; if (txt != null) e.textContent = txt; return e; };
+  const KEY = new URLSearchParams(location.search).get('key') || '';
+  let cfg = null, st = null, simS = null, tick = null, ws = null;
+  const stemById = (id) => (cfg && cfg.stems.find((s) => s.id === id)) || null;
+  const lastBy = {}, events = [], buckets = new Map(); // lastBy[stemId] = {name,color,t}
+  const COLORS = {}; // who -> color
+  const FALLBACK = ['#c9d1e6', '#b0b8d0', '#9aa4c0', '#d8c6a8'];
+  const whoInfo = (a) => {
+    if (a.name) { const b = simS && simS.bots.find((x) => x.name === a.name); return { name: a.name, color: b ? b.color : '#c9d1e6' }; }
+    if (a.source === 'engine') return { name: 'You', color: '#ffffff' };
+    if (a.source === 'http') return { name: 'HTTP', color: '#9aa4c0' };
+    if (a.source === 'sensor') return { name: 'Sensor', color: '#9aa4c0' };
+    const id = String(a.who || '').slice(0, 4); if (!COLORS[a.who]) COLORS[a.who] = FALLBACK[Object.keys(COLORS).length % FALLBACK.length];
+    return { name: 'Phone ' + id, color: COLORS[a.who] };
+  };
+  const api = (body) => fetch('/api/sim' + (KEY ? '?key=' + encodeURIComponent(KEY) : ''), { method: 'POST', body: JSON.stringify(body) }).then((r) => r.json()).then((j) => { if (j.status) { simS = j.status; renderSim(); } return j; }).catch(() => ({ ok: false, msg: 'The server did not answer.' }));
+
+  /* ---------- connection ---------- */
+  function connect() {
+    ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws?role=monitor' + (KEY ? '&key=' + encodeURIComponent(KEY) : ''));
+    ws.onopen = () => { $('#cConn').classList.add('ok'); $('#banner').style.display = 'none'; fetch('/api/sim' + (KEY ? '?key=' + encodeURIComponent(KEY) : '')).then((r) => r.json()).then((s) => { simS = s; renderSim(); }).catch(() => {}); };
+    ws.onclose = (e) => { $('#cConn').classList.remove('ok'); if (e.code === 4003 || e.code === 4001) { const b = $('#banner'); b.style.display = 'block'; b.textContent = 'This page is for the operator: open it on the machine that runs the server' + (KEY ? '.' : ', or add ?key=… if the server has an engine key.'); return; } setTimeout(connect, 1500); };
+    ws.onmessage = (e) => {
+      let m; try { m = JSON.parse(e.data); } catch { return; }
+      if (m.type === 'config') { cfg = m; renderBoard(); $('#cPack').textContent = m.pack.name; $('#cBpm').textContent = m.tempo; }
+      else if (m.type === 'state') { st = m; updateBoard(); header(); }
+      else if (m.type === 'xy') { if (st) st.xy[m.stem] = { x: m.x, y: m.y, v: m.v }; updateTile(m.stem); }
+      else if (m.type === 'tick') { tick = m; $('#cBar').textContent = m.bar + '.' + m.beat; }
+      else if (m.type === 'act') onAct(m);
+      else if (m.type === 'sim') { simS = m.status; renderSim(); }
+    };
+  }
+  function header() {
+    if (!st) return;
+    const e = $('#cEngine'); e.classList.toggle('ok', !!st.engine); $('#cEngineT').textContent = st.engine ? 'connected' : 'not connected';
+    const real = st.clients - (st.simClients || 0);
+    $('#cPeople').textContent = (st.simClients || 0) + ' simulated' + (real ? ' + ' + real + ' phone' + (real > 1 ? 's' : '') : '');
+    const b = $('#banner'); if (st.finale) { b.style.display = 'block'; b.textContent = 'The finale is playing: the gong has been struck. The simulated people wait until the engine starts a new show.'; } else if (b.textContent.startsWith('The finale')) b.style.display = 'none';
+  }
+
+  /* ---------- stems ---------- */
+  function renderBoard() {
+    const root = $('#board'); root.textContent = '';
+    for (const g of (cfg.groups && cfg.groups.length ? cfg.groups : [{ id: undefined, name: 'Layers', rules: null }])) {
+      const stems = cfg.stems.filter((s) => s.group === g.id); if (!stems.length) continue;
+      const box = el('div', 'grp'), h = el('div', 'gh'); box.dataset.g = g.id;
+      h.append(el('b', '', g.name), el('span', '', ''));
+      box.append(h); const tiles = el('div', 'tiles');
+      for (const s of stems) {
+        const t = el('div', 'tile'); t.dataset.id = s.id; t.style.setProperty('--sc', s.color || '#7fb3ff');
+        const mini = el('div', 'mini'), pad = el('div', 'pad'), dot = el('b'); pad.append(dot); if (!s.complexity) pad.classList.add('nocx'); const vol = el('div', 'vol'); vol.append(el('b')); mini.append(pad, vol);
+        t.append(el('div', 'n', s.name), el('div', 's', ''), mini, el('div', 'by', ''));
+        tiles.append(t);
+      }
+      box.append(tiles); root.append(box);
+    }
+    updateBoard();
+  }
+  function describeRules(r) { if (!r) return ''; const o = []; if (r.hidden) o.push('operator only'); if (r.maxActive) o.push('max ' + r.maxActive + ' at once'); if (r.cooldown) o.push(r.cooldown + ' s cooldown'); if (r.gate) o.push(r.gate.participants + ' people within ' + r.gate.window + ' s'); if (r.decay) o.push('fades after ' + r.decay + ' s'); if (r.finale) o.push('ends the show'); return o.join(' · '); }
+  function updateBoard() {
+    if (!cfg || !st) return;
+    let on = 0, playing = 0;
+    for (const s of cfg.stems) { updateTile(s.id); if (st.active.includes(s.id)) on++; if (st.playing.includes(s.id)) playing++; }
+    for (const box of document.querySelectorAll('.grp')) {
+      const g = (cfg.groups || []).find((x) => String(x.id) === box.dataset.g), ids = cfg.stems.filter((s) => s.group === (g && g.id)).map((s) => s.id);
+      const n = ids.filter((i) => st.active.includes(i)).length; box.querySelector('.gh span').textContent = (g && g.rules ? (g.rules.maxActive ? n + ' of ' + g.rules.maxActive + ' on · ' : n + ' on · ') : n + ' on · ') + describeRules(g && g.rules);
+    }
+    $('#stemSum').textContent = on + ' wanted · ' + playing + ' sounding';
+  }
+  function updateTile(id, flash) {
+    const t = document.querySelector('.tile[data-id="' + id + '"]'); if (!t || !st) return;
+    const s = stemById(id), isOn = st.active.includes(id), snd = st.playing.includes(id), pend = st.pending && st.pending[id];
+    t.classList.toggle('playing', snd); t.classList.toggle('wanted', isOn && !snd);
+    const sl = t.querySelector('.s'); sl.className = 's ' + (snd ? 'playing' : isOn ? 'wanted' : pend ? 'pending' : '');
+    sl.textContent = snd ? 'playing' : isOn ? (st.engine ? 'waiting for the bar' : 'wanted (no engine)') : pend ? 'vote ' + pend.have + ' of ' + pend.need : 'off';
+    const xy = (st.xy && st.xy[id]) || { x: 0.6, y: 1, v: 0.8 }, dot = t.querySelector('.pad b');
+    dot.style.left = (s && s.complexity ? xy.x * 100 : 50) + '%'; dot.style.bottom = xy.y * 100 + '%'; t.querySelector('.vol b').style.height = xy.v * 100 + '%';
+    t.title = (s ? s.name : '') + ' · complexity ' + Math.round(xy.x * 100) + '% · cutoff ' + Math.round(xy.y * 100) + '% · volume ' + Math.round(xy.v * 100) + '%';
+    const by = lastBy[id]; const bl = t.querySelector('.by'); bl.textContent = ''; if (by) { const d = el('i'); d.style.setProperty('--bc', by.color); bl.append(d, by.name + ' · ' + age(by.t)); }
+    if (flash) { t.classList.remove('flash'); void t.offsetWidth; t.classList.add('flash'); }
+  }
+  const age = (t) => { const s = Math.max(0, Math.round((Date.now() - t) / 1000)); return s < 60 ? s + 's ago' : Math.floor(s / 60) + 'm ago'; };
+
+  /* ---------- events ---------- */
+  const pct = (v) => Math.round(v * 100) + '%';
+  function onAct(a) {
+    const w = whoInfo(a), s = a.stem != null ? stemById(a.stem) : null, nm = s ? s.name : '';
+    let text = '', cls = '';
+    switch (a.kind) {
+      case 'toggle': case 'set': text = a.pending ? 'taps ' + nm + ' (waiting for enough people)' : (a.on ? 'switched ON ' : 'switched OFF ') + nm; break;
+      case 'denied': text = 'was refused on ' + nm + ': ' + a.reason; cls = 'bad'; break;
+      case 'xy': text = 'moves ' + nm + ': complexity ' + pct(a.x) + ', cutoff ' + pct(a.y) + ', volume ' + pct(a.v); cls = 'mv'; break;
+      case 'join': text = 'joined'; break; case 'leave': text = 'left'; break;
+      case 'stopAll': text = 'stopped everything'; break; case 'newShow': text = 'started a new show'; break;
+      case 'pack': text = 'switched the pack to ' + a.pack; break;
+      default: return;
+    }
+    if ((a.kind === 'toggle' || a.kind === 'set') && s && !a.pending) { lastBy[a.stem] = { name: w.name, color: w.color, t: a.t }; updateTile(a.stem, true); }
+    if (a.kind === 'xy' && s) { lastBy[a.stem] = { name: w.name, color: w.color, t: a.t }; }
+    const ev = { t: a.t, w, text, cls, kind: a.kind }; events.push(ev); if (events.length > 600) events.shift();
+    if (a.kind === 'toggle' || a.kind === 'set' || a.kind === 'denied') { const k = Math.floor(a.t / 5000); const b = buckets.get(k) || { by: {}, denied: 0 }; if (a.kind === 'denied') b.denied++; else if (!a.pending) b.by[w.name] = (b.by[w.name] || 0) + 1; buckets.set(k, b); }
+    drawLog();
+  }
+  function drawLog() {
+    const box = $('#log'), moves = $('#showMoves').checked; box.textContent = '';
+    let n = 0; for (let i = events.length - 1; i >= 0 && n < 120; i--) {
+      const e = events[i]; if (e.kind === 'xy' && !moves) continue; n++;
+      const d = el('div', e.cls), tm = new Date(e.t).toTimeString().slice(0, 8), who = el('span', 'w', e.w.name); who.style.color = e.w.color;
+      d.append(el('span', 't', tm), who, el('span', '', e.text)); box.append(d);
+    }
+    if (!n) box.append(el('div', 'mv', 'Nothing yet. Start the rehearsal, or tap something on the engine page or a phone.'));
+  }
+  $('#showMoves').onchange = drawLog;
+
+  /* ---------- chart ---------- */
+  function drawChart() {
+    const c = $('#chart'), g = c.getContext('2d'), W = c.width, H = c.height, N = 36, now = Math.floor(Date.now() / 5000); g.clearRect(0, 0, W, H);
+    const names = simS ? simS.bots.map((b) => [b.name, b.color]) : [], bw = W / N; let mx = 3;
+    const cols = []; for (let i = 0; i < N; i++) { const b = buckets.get(now - N + 1 + i); cols.push(b); if (b) mx = Math.max(mx, Object.values(b.by).reduce((a, x) => a + x, 0) + b.denied); }
+    g.strokeStyle = '#232a40'; g.lineWidth = 1; for (let k = 0; k <= 2; k++) { const y = H - 14 - (H - 24) * k / 2; g.beginPath(); g.moveTo(0, y); g.lineTo(W, y); g.stroke(); }
+    cols.forEach((b, i) => {
+      if (!b) return; let y = H - 14; const x = i * bw + 2, sc = (H - 24) / mx;
+      const all = [...names, ['others', '#c9d1e6']];
+      for (const [nm, col] of all) { const v = nm === 'others' ? Object.entries(b.by).filter(([k]) => !names.some((n) => n[0] === k)).reduce((a, [, x2]) => a + x2, 0) : (b.by[nm] || 0); if (!v) continue; g.fillStyle = col; g.fillRect(x, y - v * sc, bw - 4, v * sc - 1); y -= v * sc; }
+      if (b.denied) { g.fillStyle = '#ef8a7a'; g.fillRect(x, y - b.denied * sc, bw - 4, Math.max(2, b.denied * sc - 1)); }
+    });
+    g.fillStyle = '#8a93ad'; g.font = '14px system-ui'; g.fillText('3 min ago', 2, H - 2); g.textAlign = 'right'; g.fillText('now', W - 2, H - 2); g.textAlign = 'left'; g.fillText(mx + ' / 5 s', 2, 11);
+    const lg = $('#legend'); if (!lg.dataset.k || lg.dataset.k !== names.map((n) => n[0]).join()) { lg.dataset.k = names.map((n) => n[0]).join(); lg.textContent = ''; for (const [nm, col] of [...names, ['refused', '#ef8a7a']]) { const s = el('span'); const i = el('i'); i.style.background = col; s.append(i, nm); lg.append(s); } }
+  }
+
+  /* ---------- simulator controls ---------- */
+  function renderSim() {
+    if (!simS) return;
+    $('#simState').textContent = simS.running ? 'running' : 'stopped'; $('#simState').style.color = simS.running ? 'var(--ok)' : '';
+    $('#bStart').disabled = simS.running; $('#bStop').disabled = !simS.running;
+    const sc = $('#scen'); if (!sc.children.length) for (const s of simS.scenarios) { const b = el('button', '', s.label); b.dataset.id = s.id; b.onclick = () => api({ action: 'set', scenario: s.id }); sc.append(b); }
+    for (const b of sc.children) b.classList.toggle('on', b.dataset.id === simS.scenario);
+    if (document.activeElement !== $('#act')) $('#act').value = simS.activity;
+    $('#actV').textContent = Math.round(simS.activity * 100) + '%'; $('#actEff').textContent = simS.scenario === 'waves' ? '(right now ' + Math.round(simS.effective * 100) + '%, breathing in waves)' : '';
+    $('#churn').checked = simS.churn; $('#bGong').disabled = !simS.running;
+    const root = $('#bots');
+    if (root.children.length !== simS.bots.length) { root.textContent = ''; simS.bots.forEach(() => root.append(buildBot())); }
+    simS.bots.forEach((b, i) => fillBot(root.children[i], b));
+  }
+  function buildBot() {
+    const d = el('div', 'bot'), nm = el('div', 'nm'), sel = el('select'), cb = el('label', 'ck'), ck = el('input'); ck.type = 'checkbox'; cb.append(ck, 'in');
+    nm.append(el('b'), cb); d.append(nm, sel, el('div', 'st'), el('div', 'doing'), el('div', 'cnt'));
+    return d;
+  }
+  function fillBot(d, b) {
+    d.style.setProperty('--c', b.color); d.classList.toggle('off', !b.on);
+    d.querySelector('b').textContent = b.name;
+    const sel = d.querySelector('select'); if (!sel.children.length) { for (const p of simS.personas) { const o = el('option', '', p.label); o.value = p.id; o.title = p.desc; sel.append(o); } sel.onchange = () => api({ action: 'bot', i: b.i, persona: sel.value }); d.querySelector('input').onchange = (e) => api({ action: 'bot', i: b.i, on: e.target.checked }); }
+    if (document.activeElement !== sel) sel.value = b.persona; d.querySelector('input').checked = b.on;
+    const s = d.querySelector('.st'); s.className = 'st' + (b.connected ? ' live' : ''); s.textContent = !b.on ? 'not in the room' : b.away ? 'stepped out' : b.connected ? 'online' + (b.focus ? ' · shaping ' + b.focus : '') : simS.running ? 'connecting…' : 'waiting for start';
+    d.querySelector('.doing').textContent = b.last ? b.last + ' (' + age(b.lastAt) + ')' : '';
+    d.querySelector('.cnt').textContent = b.taps + ' taps · ' + b.denied + ' refused';
+    d.title = (simS.personas.find((p) => p.id === b.persona) || {}).desc || '';
+  }
+  $('#bStart').onclick = () => api({ action: 'start' }); $('#bStop').onclick = () => api({ action: 'stop' });
+  $('#act').oninput = (e) => { $('#actV').textContent = Math.round(e.target.value * 100) + '%'; }; $('#act').onchange = (e) => api({ action: 'set', activity: Number(e.target.value) });
+  $('#churn').onchange = (e) => api({ action: 'set', churn: e.target.checked });
+  let gongArmed = 0;
+  $('#bGong').onclick = async () => {
+    const b = $('#bGong'); if (!gongArmed) { gongArmed = setTimeout(() => { gongArmed = 0; b.textContent = 'Gong vote now'; }, 4000); b.textContent = 'This ends the show. Click again'; return; }
+    clearTimeout(gongArmed); gongArmed = 0; b.textContent = 'Gong vote now'; const r = await api({ action: 'gong' }); $('#simNote').textContent = r.msg || '';
+  };
+
+  setInterval(() => { drawChart(); if (st) for (const s of cfg ? cfg.stems : []) { const by = lastBy[s.id]; if (by) { const t = document.querySelector('.tile[data-id="' + s.id + '"] .by'); if (t && t.lastChild) t.lastChild.textContent = by.name + ' · ' + age(by.t); } } if (simS) renderSim(); }, 1000);
+  drawLog(); connect();
+})();
+</script>
+</body></html>

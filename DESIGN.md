@@ -29,11 +29,12 @@ Mappings (public/xy.js, engine.js):
 Tiered synths: arp, bells, shimmer, melody, pulse, sub (`TIERED` in synth.js, `COMPLEXITY_SYNTHS` in lib/packs.js).
 Each is rendered as three same-length loops that play in sync: a base plus two additive layers (same seed, joint 0.95 peak normalisation). `renderStem` returns the base buffer with `.layers = [l1, l2]`.
 - arp: every other beat; remaining eighths; quiet sixteenth fills.
-- bells: first bell; other bells; three extra softer bells.
+- bells: first bell of each chord; three more; four more, softer (1 / 4 / 8 per chord).
 - shimmer: one tone; second tone; third tone plus octave up.
-- pulse: first thump; second thump and eighth shaker; sixteenth shaker, pick-up, ghost thump.
-- sub: one long note per chord; leap or scoop; soft pluck per bar.
-- melody: strong beats and phrase ends; other beats; off-beats. Long (glide, acid) melodies: plan; second line an octave up avoiding semitone clashes; quiet plucked ornaments.
+- pulse: first thump; second thump, eighth shaker, tuned tom after beats 2 and 4; sixteenth shaker, pick-up, ghost thump, second tom each beat.
+- sub: one long note per chord (original sound); then the bass pulses on the bar's root: quarter notes (layer 1), eighth notes added (layer 2). No extra melody.
+- melody (other styles): strong beats and phrase ends; other beats; off-beats. Long (glide, acid) melodies: the plan; a second line an octave up avoiding semitone clashes plus the 12 strongest notes of a dense plucked line; the next 16 notes of that line.
+- Density target per 8 bars (Melody A/B, Bells): about 4 / 16 / 32 notes at sparse / medium / complex (1 / 4 / 8 per 2 bars). Added after the checkpoint tag.
 Cost: about 2x render time, 3x memory for tiered stems.
 
 ### Engine voice
