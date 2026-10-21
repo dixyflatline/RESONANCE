@@ -23,7 +23,8 @@
   #fxpanel:not(.live) .fxlive { opacity:.4; pointer-events:none; }
   #microOn { padding:5px 16px; font-weight:650; } #microOn[aria-pressed=true] { border-color:var(--accent); background:#27406e; color:#fff; box-shadow:0 0 12px rgba(127,179,255,.35); }
   .fxsrc { border:1px solid var(--line); border-radius:12px; padding:10px 12px; display:flex; flex-direction:column; gap:8px; background:#0b0e1c; }
-  .fxsrcname { font-size:18px; font-weight:650; display:flex; align-items:center; gap:8px; min-height:1.4em; } .fxsrcname i { width:12px; height:12px; border-radius:50%; background:var(--c,#7fb3ff); flex:none; box-shadow:0 0 10px var(--c,#7fb3ff); }
+  .fxchips { display:flex; flex-wrap:wrap; gap:6px; min-height:28px; } .fxchip { display:inline-flex; align-items:center; gap:6px; padding:3px 4px 3px 9px; border-radius:99px; border:1px solid var(--c,#7fb3ff); background:color-mix(in srgb, var(--c,#7fb3ff) 16%, transparent); font-size:13px; font-weight:600; } .fxchip i { width:9px; height:9px; border-radius:50%; background:var(--c,#7fb3ff); flex:none; } .fxchip.all { --c:#8a93ad; padding-right:10px; font-weight:500; }
+  .fxchip button { padding:0 7px; border:0; background:transparent; color:var(--text); font-size:15px; line-height:1.2; border-radius:99px; } .fxchip button:hover { background:rgba(255,255,255,.14); }
   .fxhint { color:var(--muted); font-size:12px; } .fxchk { display:flex; gap:8px; align-items:center; font-size:13px; } .fxchk input { flex:none; }
   .fxpresets { display:grid; grid-template-columns:1fr 1fr; gap:6px; }
   .fxpreset { display:flex; flex-direction:column; align-items:flex-start; gap:1px; padding:8px 10px; text-align:left; } .fxpreset b { font-size:14px; } .fxpreset small { color:var(--muted); font-size:11px; letter-spacing:.04em; }
@@ -206,15 +207,15 @@
   </div>
 </aside>
 <section id="fxpanel" aria-label="Microcosm effect">
-  <div class="row"><h1>MICROCOSM<small>granular effect · one instrument in</small></h1><button id="microOn" type="button" aria-pressed="false" title="Effect on / off">Off</button></div>
+  <div class="row"><h1>MICROCOSM<small>granular effect · instruments in</small></h1><button id="microOn" type="button" aria-pressed="false" title="Effect on / off">Off</button></div>
   <div class="fxhint" id="fxIdle">Start the engine to use the effect.</div>
   <div class="fxlive">
     <div class="fxsrc">
-      <span class="label">Source (the instrument that goes in)</span>
-      <div class="fxsrcname" id="fxSrcName"></div>
-      <select id="fxSource" aria-label="Effect source"></select>
-      <label class="fxchk" title="Silences the source's normal sound so you hear only what comes out of the effect. Applies while the effect is on."><input type="checkbox" id="fxMuteDry"><span>Mute the dry source (effect only)</span></label>
-      <div class="fxhint">Click <b>FX</b> beside an instrument in the sidebar to send it in.</div>
+      <span class="label">Sources (the instruments that go in)</span>
+      <div class="fxchips" id="fxChips"></div>
+      <div class="grid2"><select id="fxSource" aria-label="Add an instrument to the effect"></select><button id="fxClear" type="button" title="Remove all instruments: the effect then listens to the whole mix">Clear</button></div>
+      <label class="fxchk" title="Silences the chosen instruments' normal sound so you hear only what comes out of the effect. Applies while the effect is on."><input type="checkbox" id="fxMuteDry"><span>Mute the dry sources (effect only)</span></label>
+      <div class="fxhint">Click <b>FX</b> beside any instruments in the sidebar to send them in. None chosen = the whole mix.</div>
     </div>
     <div class="label">Effect</div>
     <div class="fxpresets" id="fxPresets"></div>

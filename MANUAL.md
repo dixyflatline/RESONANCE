@@ -37,7 +37,7 @@ Only one engine tab plays. The page that presses Start becomes the engine and an
 | Progression runs | *Endless*, or 1–64 runs, then an automatic fade-out. |
 | Fade in / Fade out | Default fade times. Some groups have their own. |
 | Chord display for | Shows chords in concert pitch or for B♭ instruments. Display only. |
-| Microcosm effect box | See section 6. |
+| Microcosm column | Between the stem list and the visuals. See section 6. |
 | Brightness | A master low-pass filter. Also a parameter a sensor can drive later. |
 | Master volume | Overall level. |
 | Export WAVs | Downloads the generated stems as WAV loops (a layer with complexity exports the full mix of its layers). |
@@ -79,13 +79,14 @@ Each phone shows one button per layer the audience may use. The core synth layer
 
 ## 6. The Microcosm effect box
 
-A granular effect in the engine sidebar, in the spirit of the Microcosm pedal. It listens to the mix and plays pieces of it back as swarms of tiny grains with feedback, tone and reverb. It is **off** at start and the audience cannot touch it. Your settings are remembered in the browser.
+A granular effect in its own column between the stem list and the visuals on the engine page, in the spirit of the Microcosm pedal. It takes **one instrument** and plays pieces of it back as swarms of tiny grains with feedback, tone and reverb. It is **off** at start, needs the engine to be started, and the audience cannot touch it. Your settings are remembered in the browser.
 
-1. Open the **Microcosm effect box** panel and press **Off** to turn it on.
-2. Pick a preset: **Mosaic**, **Glitch**, **Haze**, **Tunnel**, **Strum**, **Blocks**, **Warp** or **Pattern**. Choosing one moves the knobs to its own starting values.
-3. Shape it: **Activity** (how many grains, how fast), **Size** (grain and loop length), **Repeats** (feedback: how long the echoes last), **Tone** (filter), **Mix** (how much effect you hear).
+1. Click **FX** beside an instrument in the stem list. That instrument is now the effect's source (shown at the top of the column). Click its FX again to send the whole mix instead, or pick from the **Source** menu.
+2. Press **Off** at the top of the column to turn the effect on. The source keeps playing as it was and the effect is added on top. Tick **Mute the dry source** to hear only the effect for that instrument (it applies while the effect is on).
+3. Pick an effect: **Mosaic**, **Glitch**, **Haze**, **Tunnel**, **Strum**, **Blocks**, **Warp** or **Pattern**. Choosing one moves the knobs to its own starting values.
+4. Shape it: **Activity** (how many grains, how fast), **Size** (grain and loop length), **Repeats** (feedback: how long the echoes last), **Tone** (filter), **Mix** (how much effect you hear).
 
-Glitch, Blocks, Pattern and Strum follow the tempo. To try the presets without the show, open **http://localhost:8080/micro.html** and press Start sound.
+The effect hears the instrument after its own pad settings (cutoff and volume). It only has something to play back while the source is sounding, so switch the source instrument on first. Glitch, Blocks, Pattern and Strum follow the tempo. To try the presets without the show, open **http://localhost:8080/micro.html** and press Start sound.
 
 Tip: turn Mix down before you change preset during a quiet moment, and raise **Repeats** slowly. High Repeats on Haze or Tunnel builds a thick wash.
 

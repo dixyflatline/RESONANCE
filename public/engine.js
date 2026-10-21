@@ -214,45 +214,46 @@
   // A panel between the stem list and the visuals. One instrument at a time is sent into it (the FX buttons in the stem list, or the Source menu);
   // "All" sends the whole mix instead. The effect is wet-only; the source keeps playing dry unless "Mute the dry source" is ticked.
   let micro = null, masterSend = null;
-  let fxSource = null, fxSourceName = null, fxMuteDry = false; // fxSource: a stem id, or null for the whole mix
+  let fxSet = new Set(), fxNames = [], fxMuteDry = false; // fxSet: the stem ids that feed the effect (empty = the whole mix); fxNames: the same by name, to survive a pack switch
   const KN = ['activity', 'size', 'repeats', 'tone', 'mix'];
-  function keepMicro() { try { localStorage.setItem('resonance.micro', JSON.stringify({ preset: micro && micro.preset, on: micro && micro.enabled, knobs: micro && micro.knobs, src: fxSourceName, muteDry: fxMuteDry })); } catch { /* storage unavailable */ } }
-  function wireFx(st) { /* every stem gets a send into the effect and a gain on its dry path, so one of them can be the effect's source */
+  function keepMicro() { try { localStorage.setItem('resonance.micro', JSON.stringify({ preset: micro && micro.preset, on: micro && micro.enabled, knobs: micro && micro.knobs, src: fxNames, muteDry: fxMuteDry })); } catch { /* storage unavailable */ } }
+  function wireFx(st) { /* every stem gets a send into the effect and a gain on its dry path, so any of them can be a source */
     st.fxSend = ctx.createGain(); st.fxSend.gain.value = 0; st.xyGain.connect(st.fxSend);
     if (micro) st.fxSend.connect(micro.input);
   }
-  function applyFx() { /* the routing follows the selection: only the chosen source feeds the effect, and its dry sound can be muted while the effect is on */
+  function applyFx() { /* the routing follows the selection: only the chosen sources feed the effect, and their dry sound can be muted while the effect is on */
     if (!ctx) return;
     const now = ctx.currentTime, on = !!(micro && micro.enabled);
     for (const [id, st] of stems) {
-      const src = fxSource === id;
+      const src = fxSet.has(id);
       if (st.fxSend) st.fxSend.gain.setTargetAtTime(src ? 1 : 0, now, 0.03);
       if (st.dry) st.dry.gain.setTargetAtTime(src && fxMuteDry && on ? 0 : 1, now, 0.03);
     }
-    if (masterSend) masterSend.gain.setTargetAtTime(fxSource === null ? 1 : 0, now, 0.03);
+    if (masterSend) masterSend.gain.setTargetAtTime(fxSet.size === 0 ? 1 : 0, now, 0.03);
   }
-  function setFxSource(id) {
-    fxSource = id == null ? null : Number(id);
-    const def = fxSource === null ? null : cfg.stems.find((x) => x.id === fxSource);
-    if (fxSource !== null && !def) fxSource = null;
-    fxSourceName = def ? def.name : null;
+  function setFxSources(ids) { /* a whole new selection (an empty one = the whole mix) */
+    fxSet = new Set(ids.map(Number).filter((id) => cfg.stems.some((x) => x.id === id)));
+    fxNames = [...fxSet].map((id) => cfg.stems.find((x) => x.id === id).name);
     renderFx(); applyFx(); if (micro) keepMicro();
   }
+  const toggleFxSource = (id) => setFxSources(fxSet.has(id) ? [...fxSet].filter((x) => x !== id) : [...fxSet, id]);
   function renderFx() {
-    const def = fxSource === null ? null : cfg.stems.find((x) => x.id === fxSource);
-    const nm = $('#fxSrcName'); if (!nm) return;
-    nm.style.setProperty('--c', def ? (def.color || '#7fb3ff') : '#7fb3ff');
-    nm.innerHTML = `<i></i><span>${def ? def.name : 'All (the whole mix)'}</span>`;
-    const sel = $('#fxSource'); sel.value = fxSource === null ? '' : String(fxSource);
-    $('#fxMuteDry').disabled = fxSource === null; if (fxSource === null) $('#fxMuteDry').checked = false;
-    document.querySelectorAll('.fxbtn').forEach((b) => b.classList.toggle('on', Number(b.dataset.id) === fxSource));
-  }
-  function fillFxSources() { /* the Source menu lists this pack's instruments (called when the stem list is built) */
+    const box = $('#fxChips'); if (!box) return;
+    box.innerHTML = fxSet.size
+      ? [...fxSet].map((id) => { const d = cfg.stems.find((x) => x.id === id); return `<span class="fxchip" style="--c:${d.color || '#7fb3ff'}"><i></i>${d.name}<button type="button" data-id="${id}" aria-label="Remove ${d.name}" title="Remove">×</button></span>`; }).join('')
+      : '<span class="fxchip all"><i></i>The whole mix</span>';
+    box.querySelectorAll('button').forEach((b) => b.addEventListener('click', () => toggleFxSource(Number(b.dataset.id))));
     const sel = $('#fxSource'); sel.innerHTML = '';
-    sel.add(new Option('All (the whole mix)', ''));
-    for (const d of cfg.stems) if (!d.finale) sel.add(new Option(d.name, String(d.id)));
-    const byName = fxSourceName && cfg.stems.find((x) => x.name === fxSourceName); /* a pack switch: keep the same instrument when the new pack has it */
-    fxSource = byName ? byName.id : null; if (!byName) fxSourceName = null;
+    sel.add(new Option('Add an instrument…', ''));
+    for (const d of cfg.stems) if (!d.finale && !fxSet.has(d.id)) sel.add(new Option(d.name, String(d.id)));
+    sel.value = '';
+    $('#fxClear').disabled = fxSet.size === 0;
+    $('#fxMuteDry').disabled = fxSet.size === 0; if (fxSet.size === 0) $('#fxMuteDry').checked = false;
+    document.querySelectorAll('.fxbtn').forEach((b) => b.classList.toggle('on', fxSet.has(Number(b.dataset.id))));
+  }
+  function fillFxSources() { /* (called when the stem list is built, and after a pack switch: the same instruments by name, when the new pack has them) */
+    fxSet = new Set(cfg.stems.filter((d) => fxNames.includes(d.name)).map((d) => d.id));
+    fxNames = [...fxSet].map((id) => cfg.stems.find((x) => x.id === id).name);
     renderFx(); applyFx();
   }
   function initMicroUI() {
@@ -272,11 +273,12 @@
       }
       for (const k of KN) $('#mk_' + k).addEventListener('input', (e) => { micro.set(k, Number(e.target.value)); show(); keepMicro(); });
       $('#microOn').addEventListener('click', () => { power(!micro.enabled); keepMicro(); });
-      $('#fxSource').addEventListener('change', (e) => setFxSource(e.target.value === '' ? null : e.target.value));
+      $('#fxSource').addEventListener('change', (e) => { if (e.target.value !== '') toggleFxSource(Number(e.target.value)); });
+      $('#fxClear').addEventListener('click', () => setFxSources([]));
       $('#fxMuteDry').addEventListener('change', (e) => { fxMuteDry = e.target.checked; applyFx(); keepMicro(); });
     }
     if (saved.preset && ResonanceMicro.PRESETS[saved.preset]) { micro.setPreset(saved.preset, true); for (const k of KN) if (typeof saved.knobs?.[k] === 'number') micro.set(k, saved.knobs[k]); }
-    if (saved.src && !fxSourceName) fxSourceName = saved.src;
+    if (!fxNames.length && saved.src) fxNames = [].concat(saved.src).filter((x) => typeof x === 'string'); /* (older saves kept a single name) */
     fxMuteDry = !!saved.muteDry; $('#fxMuteDry').checked = fxMuteDry;
     micro.setTempo(cfg.tempo); power(!!saved.on); show(); fillFxSources();
     $('#fxpanel').classList.add('live'); $('#fxIdle').hidden = true;
@@ -707,8 +709,8 @@
       mini.addEventListener('click', () => sheet.open(def, xyState[id] || ResonanceXY.XY_DEFAULT, desired.has(id)));
       row.appendChild(mini);
       if (!def.finale) { /* FX: send this instrument into the Microcosm panel (click again for the whole mix) */
-        const fx = document.createElement('button'); fx.type = 'button'; fx.className = 'fxbtn'; fx.dataset.id = id; fx.textContent = 'FX'; fx.title = 'Send this instrument into the Microcosm effect (click again to send the whole mix)';
-        fx.addEventListener('click', () => setFxSource(fxSource === id ? null : id)); row.insertBefore(fx, mini);
+        const fx = document.createElement('button'); fx.type = 'button'; fx.className = 'fxbtn'; fx.dataset.id = id; fx.textContent = 'FX'; fx.title = 'Send this instrument into the Microcosm effect (click more than one to send several; click again to remove it)';
+        fx.addEventListener('click', () => toggleFxSource(id)); row.insertBefore(fx, mini);
       }
     });
     fillFxSources();
