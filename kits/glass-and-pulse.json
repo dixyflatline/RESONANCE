@@ -1,0 +1,40 @@
+{
+  "name": "Glass and pulse",
+  "description": "Arp, bells, shimmer and the two lead lines, with the arp chopped by the plucks box and the lead melting in the long-tone box.",
+  "melodic": "melodic-synth",
+  "rhythmic": "rhythmic-synth",
+  "order": 3,
+  "micro": {
+    "a": {
+      "preset": "mosaic",
+      "on": true,
+      "knobs": {
+        "activity": 0.5,
+        "size": 0.5,
+        "repeats": 0.45,
+        "tone": 0.75,
+        "mix": 0.4
+      },
+      "src": [
+        "Arp",
+        "Bells"
+      ],
+      "muteDry": false
+    },
+    "b": {
+      "preset": "tunnel",
+      "on": true,
+      "knobs": {
+        "activity": 0.5,
+        "size": 0.55,
+        "repeats": 0.6,
+        "tone": 0.35,
+        "mix": 0.45
+      },
+      "src": [
+        "Melody A"
+      ],
+      "muteDry": false
+    }
+  }
+}

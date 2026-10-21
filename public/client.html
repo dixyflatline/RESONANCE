@@ -134,6 +134,11 @@ window.addEventListener('error', function (e) {
     ws.onmessage = (e) => {
       const m = JSON.parse(e.data);
       if (m.type === 'config') {
+        if (cfg && cfg.pack && m.pack && cfg.pack.id === m.pack.id && (cfg.pack.rev ?? 0) !== (m.pack.rev ?? 0)) { // a kit swapped some sounds: forget the pads and piano rolls of the stems that changed
+          const was = new Map(cfg.stems.map((d) => [d.id, JSON.stringify(d)]));
+          for (const d of cfg.stems.concat(m.stems)) if (was.get(d.id) !== JSON.stringify(m.stems.find((x) => x.id === d.id))) { delete xyState[d.id]; for (const o of [rolls, sched, estStart]) delete o[d.id]; }
+          sheet.close();
+        }
         if (cfg && cfg.pack && m.pack && cfg.pack.id !== m.pack.id) { // pack switched: forget the old pads
           for (const k of Object.keys(xyState)) delete xyState[k];
           for (const o of [rolls, sched, estStart]) for (const k of Object.keys(o)) delete o[k];
@@ -158,7 +163,7 @@ window.addEventListener('error', function (e) {
     const el = $('#status');
     if (!ws || ws.readyState !== 1) { el.textContent = hung ? 'cannot reach ' + location.host + ', retrying…' : 'reconnecting…'; el.className = 'bad'; return; }
     if (!state.engine) { el.textContent = 'waiting for engine'; el.className = 'bad'; return; }
-    el.textContent = `live · ${state.clients} connected`; el.className = '';
+    el.textContent = state.kitPending ? 'changing sounds…' : `live · ${state.clients} connected`; el.className = '';
   }
 
   // Pick the column count whose cells come closest to a comfortable pad shape.

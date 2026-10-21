@@ -263,6 +263,21 @@ Practise playing against a changing room without a room full of people. Open **h
 
 While the engine renders a layer that has complexity, `synth.js` records every note it builds (`rec()` in the leaf voices: pluck, bell, thump, noise hit, pad, glide and acid leads, sub notes) as `[start beat, length in beats, pitch, layer]` in beats, so a tempo change keeps them right. `renderStem` attaches them to the buffer as `roll`. The engine sends them to the server as `notes` messages (one per stem, again whenever it renders, and again after a reconnect or claim), and the server keeps the latest per stem for phones that join later and forwards them to phones only. The engine's `tick` message carries `n` (the beat count since the loop start) and `bpm`, which the phone runs a local clock on (nudged toward each tick). When a layer is switched on, the engine also sends `sched` with the beat where it will come in, so the phone can mark the entry line exactly. `public/roll.js` draws the strip; the pad sheet in `xy.js` hosts it when the page passes a `rollView(id)` function (the phone page does, the engine page does not).
 
+## Kits
+
+A kit swaps the **Melodic** and **Rhythmic** sounds of the live pack while the show runs (`lib/kits.js`, files in `kits/`, panel: **Kits…** on the engine page).
+
+```json
+{ "name": "Tidal melodies", "description": "…", "melodic": "melody-ambient", "rhythmic": "rhythmic-synth",
+  "micro": { "b": { "preset": "haze", "on": true, "knobs": { "mix": 0.45 }, "src": ["Melody A · Lyrical"], "muteDry": false } } }
+```
+
+- **Sound sets:** a plain pack's stems fill the group's slots in order, under the group's audience rules (complexity layers, fades, limits). A pack names the roles it can fill with `"sets": ["melodic"]` / `["rhythmic"]` in `pack.json`; otherwise it is guessed from a `melodic` / `rhythmic` group, or from its synths (arp, bells, shimmer, melody, marp, mchords, mbass = melodic; pulse, sub = rhythmic). A set does not fit when its recorded loops differ in tempo or beats per bar from the live pack, or its generated stems are in another mode (major vs minor); the panel shows why.
+- **Hand-over:** `{type:'kit', id}` (or `{type:'kit', melodic, rhythmic}`) over the engine socket or `POST /api/input` switches the group's stems off (they fade out as usual), blocks new taps on them (phones see "The sounds are changing…"), and applies the swap when the engine reports them silent, or after 45 s, or at once when no engine is connected. The server then publishes a new `config` with a bumped `pack.rev` and `pack.kit`; the engine rebuilds only the stems that changed (the others, including Core synth, keep playing) and the phones update their grids. Slot ids are kept in order, so the rest of the audience state is untouched; extra stems get new ids, spare slots disappear.
+- **Saving:** `{type:'kitSave', name, micro}` (engine, HTTP) writes `kits/<name>.json` with the live Melodic/Rhythmic picks and the Microcosm settings. `GET /api/kits` lists the kits, the available sets for each role and the current choice.
+- **Starter kits:** `layers-default`, `tidal-melodies` (the four melodies and arp through the long-tone box) and `glass-and-pulse`.
+- Kits need a pack with `melodic` and `rhythmic` groups, such as Layers.
+
 ## Microcosm effect box
 
 A separate granular effect, in the spirit of the Hologram Electronics Microcosm pedal (`public/microcosm.js`, an AudioWorklet; a new implementation, not the pedal's code). It listens to the mix, keeps the last 12 seconds and plays it back as swarms of tiny grains, with feedback, a tone filter and a reverb. It is a wet-only send: the engine takes it after the brightness filter and returns it just before the compressor, so the dry mix is never touched. It is **off** when the engine starts.
@@ -372,6 +387,8 @@ A sensor bridge (for example a Python HRV/EEG process) can POST these messages, 
 server.js          HTTP + WebSocket hub, state, input handling
 config.json        default pack, tempo, beats/bar, quantize, fade, key, seed
 lib/packs.js       pack discovery + validation
+lib/kits.js        kits: sound sets, composing the live pack, kit files
+kits/              saved kits (JSON, one per kit)
 examples/          bb-trumpet-example.musicxml (a MusicXML chart to try)
 public/musicxml.js  MusicXML / .mxl chord-symbol reader
 tools/             list-packs.js (npm run packs), fetch-cc0-stems.js

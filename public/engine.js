@@ -37,6 +37,7 @@
   let runs = 0, runStart = null, runEnded = false; // runs = progression passes before auto fade-out (0 = endless)
   const xyState = {};      // id -> { x, y } (x = cutoff, y = volume), mirrored from the server
   let sheet = null;        // XY controller sheet
+  let curRev = 0;          // the kit revision of the stems on this page (the server bumps it when Melodic / Rhythmic sounds are swapped)
   let curPackId = null;    // pack the stems/buffers on this page were built for
   let switching = false;   // true while a pack switch is fading out / loading
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -66,6 +67,8 @@
     const first = !cfg;
     if (!first && c.build && cfg.build && c.build !== cfg.build) $('#updateBar').hidden = false; // code changed on the server: offer a page reload
     const packChanged = !first && cfg.pack && c.pack && cfg.pack.id !== c.pack.id;
+    const kitChanged = !first && !packChanged && cfg.pack && c.pack && (cfg.pack.rev ?? 0) !== (c.pack.rev ?? 0); /* the same pack, with other Melodic / Rhythmic sounds: a kit went live */
+    const prevCfg = cfg;
     cfg = c; packTempo = c.tempo; // the tempo the pack's recorded files were cut at
     if (packChanged) tempoOverride = null;
     if (tempoOverride) cfg = { ...c, tempo: tempoOverride };
@@ -94,6 +97,8 @@
     drawQR(local && c.lanUrls.length ? c.lanUrls[0] : location.origin + '/');
     buildStemRows();
     if (packChanged && started) switchPack();
+    else if (kitChanged) swapKit(prevCfg);
+    kitBar();
   }
 
   /* QR for the audience URL (library is bundled, works offline). Click a URL to switch the code. */
@@ -198,6 +203,7 @@
       if (!cur || cur.x !== p.x || cur.y !== p.y || cur.v !== p.v) onXY(Number(id), p);
     }
     desired = new Set(s.active);
+    if (!!s.kitPending !== !!kitPendingNow) { kitPendingNow = s.kitPending; kitBar(); if (kitPendingNow) toast('kit', 'work', `Changing sounds: ${kitPendingNow.roles.length ? kitPendingNow.roles.join(' + ') + ' fading out…' : 'applying…'}`); }
     playsState = s.plays || {};
     if (pendingStop && desired.size) endStop(`Stopped, but ${desired.size} stem${desired.size > 1 ? 's were' : ' was'} started again`); /* someone tapped during the fade: don't leave a stale "Stopping…" message */
     if (s.params && typeof s.params.brightness === 'number') {
@@ -272,6 +278,19 @@
     }
     renderFx(); applyFx();
   }
+  function applySlotSaved(x, sv) { /* set one box from saved settings (the browser's own save, or a kit) */
+    const P = ResonanceMicro.PRESETS, d = x.def, ok = sv.preset && P[sv.preset] && P[sv.preset].group === d.group;
+    x.micro.setPreset(ok ? sv.preset : d.first, !!ok);
+    for (const k of KN) if (typeof sv.knobs?.[k] === 'number') x.micro.set(k, sv.knobs[k]);
+    x.names = [].concat(sv.src || []).filter((n) => typeof n === 'string'); /* (older saves kept a single name) */
+    x.muteDry = !!sv.muteDry; x.ui.q('.fxMuteDry').checked = x.muteDry;
+    x.micro.setTempo(cfg.tempo); x.ui.power(!!sv.on); x.ui.show();
+  }
+  function applyKitMicro(m) { /* a kit's effect settings: boxes it does not mention are left as they are */
+    for (const x of slotList()) if (m[x.def.key] && x.ui) applySlotSaved(x, m[x.def.key]);
+    fillFxSources(); keepMicro();
+  }
+  const microNow = () => Object.fromEntries(slotList().map((x) => [x.def.key, serSlot(x)]));
   function initMicroUI() {
     let saved = {};
     try { saved = JSON.parse(localStorage.getItem('resonance.micro2') || 'null'); } catch { /* storage unavailable */ }
@@ -305,12 +324,8 @@
       q('.fxSource').addEventListener('change', (e) => { if (e.target.value !== '') toggleFxSource(x, Number(e.target.value)); });
       q('.fxClear').addEventListener('click', () => setFxSources(x, []));
       q('.fxMuteDry').addEventListener('change', (e) => { x.muteDry = e.target.checked; applyFx(); keepMicro(); });
-      const P = ResonanceMicro.PRESETS;
-      x.micro.setPreset(sv.preset && P[sv.preset] && P[sv.preset].group === d.group ? sv.preset : d.first, !!(sv.preset && P[sv.preset] && P[sv.preset].group === d.group));
-      for (const k of KN) if (typeof sv.knobs?.[k] === 'number') x.micro.set(k, sv.knobs[k]);
-      x.names = [].concat(sv.src || []).filter((n) => typeof n === 'string'); /* (older saves kept a single name) */
-      x.muteDry = !!sv.muteDry; q('.fxMuteDry').checked = x.muteDry;
-      x.micro.setTempo(cfg.tempo); power(!!sv.on); show();
+      x.ui = { show, power, q };
+      applySlotSaved(x, sv);
     }
     const showTab = () => {
       tabs.querySelectorAll('.fxtab').forEach((t) => t.setAttribute('aria-selected', String(t.dataset.slot === fxTab)));
@@ -356,21 +371,48 @@
 
   // One audio chain per stem of the current pack:
   // voices -> bus (pack gain) -> low-pass (XY x) -> xyGain (XY y) -> analyser + master
+  function makeStemNodes(def) {
+    const bus = ctx.createGain(); bus.gain.value = def.gain ?? 0.7;
+    const filter = ctx.createBiquadFilter(); filter.type = 'lowpass'; filter.Q.value = 1.3; /* a touch of resonance so a cutoff sweep sings */ filter.frequency.value = 20000;
+    const xyGain = ctx.createGain();
+    const analyser = ctx.createAnalyser(); analyser.fftSize = 512;
+    const dry = ctx.createGain(); /* the stem's normal path to the mix (the Microcosm panel can mute it for its source) */
+    bus.connect(filter).connect(xyGain);
+    xyGain.connect(analyser); xyGain.connect(dry); dry.connect(master);
+    const st = { def, buffer: null, layers: [], bus, filter, xyGain, dry, analyser, voice: null, stopUntil: 0, level: 0 };
+    stems.set(def.id, st); wireFx(st);
+    return st;
+  }
+  const dropStemNodes = (st) => { for (const n of [st.bus, st.filter, st.xyGain, st.dry, ...Object.values(st.fxSends || {}), st.analyser]) { try { n.disconnect(); } catch { /* already gone */ } } };
   function createStemNodes() {
-    curPackId = cfg.pack ? cfg.pack.id : null;
-    for (const def of cfg.stems) {
-      const bus = ctx.createGain(); bus.gain.value = def.gain ?? 0.7;
-      const filter = ctx.createBiquadFilter(); filter.type = 'lowpass'; filter.Q.value = 1.3; /* a touch of resonance so a cutoff sweep sings */ filter.frequency.value = 20000;
-      const xyGain = ctx.createGain();
-      const analyser = ctx.createAnalyser(); analyser.fftSize = 512;
-      const dry = ctx.createGain(); /* the stem's normal path to the mix (the Microcosm panel can mute it for its source) */
-      bus.connect(filter).connect(xyGain);
-      xyGain.connect(analyser); xyGain.connect(dry); dry.connect(master);
-      const st = { def, buffer: null, layers: [], bus, filter, xyGain, dry, analyser, voice: null, stopUntil: 0, level: 0 };
-      stems.set(def.id, st); wireFx(st);
-    }
+    curPackId = cfg.pack ? cfg.pack.id : null; curRev = cfg.pack ? cfg.pack.rev ?? 0 : 0;
+    for (const def of cfg.stems) makeStemNodes(def);
     for (const def of cfg.stems) applyXY(def.id);
     applyFx(); /* (the Microcosm source, if any, applies to the new stems) */
+  }
+
+  // A kit went live: the server has faded out the Melodic / Rhythmic stems and replaced them. Only the stems that changed are rebuilt;
+  // the others (core synth, nature samples...) keep playing, in time, throughout.
+  async function swapKit(prev) {
+    while (switching) await sleep(100);
+    switching = true;
+    try {
+      const was = new Map(prev.stems.map((d) => [d.id, JSON.stringify(d)]));
+      const fresh = cfg.stems.filter((d) => was.get(d.id) !== JSON.stringify(d));
+      const gone = prev.stems.filter((d) => !cfg.stems.some((x) => x.id === d.id) || fresh.some((x) => x.id === d.id));
+      for (const d of gone) { const st = stems.get(d.id); if (st) { if (st.voice) { stopVoice(st.voice, ctx.currentTime + LEAD, st); st.voice = null; } dropStemNodes(st); stems.delete(d.id); } delete xyState[d.id]; }
+      curRev = cfg.pack.rev ?? 0;
+      toast('kit', 'work', `Loading ${cfg.pack.kit ? cfg.pack.kit.name : 'new sounds'}…`);
+      for (const d of fresh) { if (xyState[d.id] === undefined) delete xyState[d.id]; makeStemNodes(d); }
+      for (const d of fresh) applyXY(d.id);
+      if (sheet) sheet.close();
+      const defs = fresh;
+      if (defs.length) setBuffers(await loadAll(cfg.tempo, defs));
+      buildStemRows(); applyFx();
+      const m = cfg.pack.kit && cfg.pack.kit.micro; if (m) applyKitMicro(m);
+      toast('kit', 'ok', `✓ ${cfg.pack.kit ? cfg.pack.kit.name : 'Sounds'} is live`);
+    } finally { switching = false; }
+    reconcile(); renderRows(); kitBar();
   }
 
   // Switch to the pack in `cfg`: fade out whatever is playing, load the new stems, restart the bar count.
@@ -415,9 +457,8 @@
     if (kind !== 'work') btn._t = setTimeout(() => { btn.textContent = btn.dataset.orig; btn.classList.remove('done'); }, 2500);
   }
   let progressHook = null;
-  async function loadAll(tempo = cfg.tempo) {
+  async function loadAll(tempo = cfg.tempo, defs = cfg.stems) {
     rendering = true;
-    const defs = cfg.stems;
     let done = 0;
     const progress = () => {
       const t = `Preparing ${cfg.pack ? cfg.pack.name : 'stems'}… ${done}/${defs.length}`;
@@ -1050,13 +1091,63 @@
     }));
   }
 
+  // ---------------- Kits ----------------
+  let kitData = null;
+  const kitNameOf = (id, role) => { const r = kitData && kitData.roles[role]; const x = r && r.sets.find((q) => q.id === id); return x ? x.name : (id || 'pack default'); };
+  function kitBar() { /* the button in the effect column: the live kit's name, and a pulse while a swap is waiting */
+    const b = $('#kitBtn'); if (!b) return;
+    const k = cfg && cfg.pack && cfg.pack.kit;
+    b.textContent = kitPendingNow ? 'Changing…' : k ? 'Kit: ' + k.name : 'Kits…'; b.classList.toggle('busy', !!kitPendingNow);
+  }
+  let kitPendingNow = null;
+  async function loadKits() {
+    try { kitData = await (await fetch('/api/kits', { cache: 'no-store' })).json(); renderKits(); }
+    catch (e) { $('#kitBody').innerHTML = `<p class="muted">Couldn't load kits: ${esc(e.message)}</p>`; }
+  }
+  function renderKits() {
+    const d = kitData, cur = d.current || {}, picks = cur.picks || {};
+    if (!d.canKit) { $('#kitBody').innerHTML = `<p class="muted">Kits swap the Melodic and Rhythmic groups, and the live pack has no such groups. Use a pack like “Layers” first.</p>`; return; }
+    const opts = (role) => {
+      const r = d.roles[role];
+      return `<option value="">Pack's own (${r.slots} stems)</option>` + r.sets.map((x) => `<option value="${esc(x.id)}" ${x.ok ? '' : 'disabled'} ${picks[role] === x.id ? 'selected' : ''}>${esc(x.name)}${x.ok ? '' : ' — ' + esc(x.reason)}</option>`).join('');
+    };
+    const setsLine = (role, id) => { const x = d.roles[role].sets.find((q) => q.id === id); return x ? x.stems.map((s) => esc(s.name)).join(' · ') + (x.warnings.length ? '<br>⚠ ' + esc(x.warnings.join('; ')) : '') : 'The sounds the pack came with.'; };
+    $('#kitBody').innerHTML = `
+      <section><h3>Saved kits</h3>${d.kits.length ? d.kits.map((k) => `<div class="kit${cur.kit === k.id ? ' active' : ''}">
+        <div><b>${esc(k.name)}</b><small>${esc(k.description || '')}${k.description ? '<br>' : ''}Melodic: ${esc(kitNameOf(k.melodic, 'melodic'))} · Rhythmic: ${esc(kitNameOf(k.rhythmic, 'rhythmic'))}${k.micro ? ' · with Microcosm settings' : ''}</small></div>
+        <button data-kit="${esc(k.id)}">${cur.kit === k.id ? 'Reload' : 'Load'}</button></div>`).join('') : '<p class="muted">No kits yet. Pick sounds below, load them, and save them as a kit.</p>'}</section>
+      <section><h3>Pick sounds</h3>
+        <div class="kitpick">
+          <label><span class="label">Melodic</span><select id="kitMel">${opts('melodic')}</select><span class="kitsets" id="kitMelSets"></span></label>
+          <label><span class="label">Rhythmic</span><select id="kitRhy">${opts('rhythmic')}</select><span class="kitsets" id="kitRhySets"></span></label>
+        </div>
+        <div style="margin-top:10px"><button id="kitLoad">Load these sounds</button></div>
+      </section>
+      <section><h3>Save what is live as a kit</h3>
+        <div class="kitsave"><input id="kitName" type="text" maxlength="60" placeholder="Kit name" value="${esc(cfg && cfg.pack && cfg.pack.kit && cfg.pack.kit.name || '')}"><button id="kitSave">Save kit</button></div>
+        <p class="muted" style="margin:6px 0 0;font-size:12px">Saves the Melodic and Rhythmic sounds that are live, plus both Microcosm boxes (presets, knobs, which instruments feed them). Saving with an existing name updates it.</p>
+      </section>`;
+    const upd = () => { $('#kitMelSets').innerHTML = setsLine('melodic', $('#kitMel').value); $('#kitRhySets').innerHTML = setsLine('rhythmic', $('#kitRhy').value); };
+    $('#kitMel').addEventListener('change', upd); $('#kitRhy').addEventListener('change', upd); upd();
+    $('#kitBody').querySelectorAll('[data-kit]').forEach((b) => b.addEventListener('click', () => { send({ type: 'kit', id: b.dataset.kit }); toast('kit', 'work', 'Kit requested: the Melodic and Rhythmic sounds are fading out…'); closeKits(); }));
+    $('#kitLoad').addEventListener('click', () => { send({ type: 'kit', melodic: $('#kitMel').value || null, rhythmic: $('#kitRhy').value || null, name: 'Custom sounds' }); toast('kit', 'work', 'Kit requested: the Melodic and Rhythmic sounds are fading out…'); closeKits(); });
+    $('#kitSave').addEventListener('click', async () => {
+      const name = $('#kitName').value.trim(); if (!name) { toast('kit', 'err', 'Give the kit a name first.'); return; }
+      send({ type: 'kitSave', name, micro: microNow() }); toast('kit', 'ok', `✓ Saved kit “${name}”`); setTimeout(loadKits, 500);
+    });
+  }
+  const openKits = () => { $('#kits').hidden = false; loadKits(); };
+  const closeKits = () => { $('#kits').hidden = true; };
+
   // ---------------- Wire up ----------------
   $('#key').innerHTML = ResonanceSynth.KEYS.map((k) => `<option>${k}</option>`).join('');
   $('#packBtn').addEventListener('click', () => { window.closeMenu && window.closeMenu(); openPacks(); });
   $('#packsClose').addEventListener('click', closePacks);
+  $('#kitBtn').addEventListener('click', openKits); $('#kitsClose').addEventListener('click', closeKits); $('#kitsRescan').addEventListener('click', loadKits);
+  $('#kits').addEventListener('pointerdown', (e) => { if (e.target === $('#kits')) closeKits(); });
   $('#packsRescan').addEventListener('click', loadPackList);
   $('#packs').addEventListener('pointerdown', (e) => { if (e.target === $('#packs')) closePacks(); });
-  addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$('#packs').hidden) closePacks(); });
+  addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$('#packs').hidden) closePacks(); if (e.key === 'Escape' && !$('#kits').hidden) closeKits(); });
   $('#startBtn').addEventListener('click', async () => { $('#startBtn').disabled = true; await start(); });
   $('#quantize').addEventListener('change', (e) => { quantize = e.target.value; reportQuantize(); toast('quant', 'ok', `✓ Quantize: ${e.target.selectedOptions[0].textContent}. Taps now land on the next ${quantize === 'bar' ? 'bar line' : quantize === 'half' ? 'half bar' : 'beat'}`); });
   const showFade = () => { $('#fadeInVal').textContent = Number($('#fadeIn').value).toFixed(1) + ' s'; $('#fadeOutVal').textContent = Number($('#fadeOut').value).toFixed(1) + ' s'; };

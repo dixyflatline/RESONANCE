@@ -57,11 +57,16 @@
   #srv { color:var(--muted); font-size:12px; display:flex; flex-direction:column; gap:6px; }
   #updateBar { background:#1d3b2c; border:1px solid #2e6b4b; color:#cfffe3; padding:8px 10px; border-radius:8px; display:flex; justify-content:space-between; align-items:center; gap:8px; }
   #updateBar[hidden] { display:none; }
-  #packs { position:fixed; inset:0; z-index:900; background:rgba(6,8,14,.86); backdrop-filter:blur(6px); display:flex; align-items:center; justify-content:center; padding:20px; }
-  #packs[hidden] { display:none; }
+  #packs, #kits { position:fixed; inset:0; z-index:900; background:rgba(6,8,14,.86); backdrop-filter:blur(6px); display:flex; align-items:center; justify-content:center; padding:20px; }
+  #packs[hidden], #kits[hidden] { display:none; }
   .sheet { width:min(760px,100%); max-height:100%; background:#11152a; border:1px solid var(--line); border-radius:18px; display:flex; flex-direction:column; overflow:hidden; }
   .sheet > header { display:flex; justify-content:space-between; align-items:center; gap:10px; padding:14px 18px; border-bottom:1px solid var(--line); }
   .sheet > header h2 { margin:0; font-size:17px; } .sheet > header small { display:block; color:var(--muted); font-weight:400; font-size:12px; }
+  #kitBody { overflow:auto; padding:14px 18px; display:flex; flex-direction:column; gap:14px; } #kitBody h3 { margin:0; font-size:13px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); font-weight:600; }
+  .kitpick { display:grid; grid-template-columns:1fr 1fr; gap:10px; } .kitpick label { display:flex; flex-direction:column; gap:4px; } .kitpick select { width:100%; } .kitsets { color:var(--muted); font-size:12px; min-height:2.4em; }
+  .kit { border:1px solid var(--line); border-radius:12px; padding:10px 12px; background:#0e1224; display:flex; justify-content:space-between; gap:12px; align-items:center; } .kit.active { border-color:var(--accent); box-shadow:0 0 0 1px var(--accent) inset; } .kit b { font-size:15px; } .kit small { display:block; color:var(--muted); font-size:12px; margin-top:2px; }
+  .kit button, #kitLoad, #kitSave { flex:none; background:#27406e; border-color:#3d5f9c; } .kitsave { display:flex; gap:8px; } .kitsave input { flex:1; min-width:0; }
+  #kitBtn { padding:5px 12px; font-size:12px; max-width:150px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; } #kitBtn.busy { border-color:var(--accent); box-shadow:0 0 10px rgba(127,179,255,.35); }
   #packList { overflow:auto; padding:14px 18px; display:flex; flex-direction:column; gap:12px; }
   .sheet > footer { padding:10px 18px; border-top:1px solid var(--line); color:var(--muted); font-size:12px; display:flex; justify-content:space-between; align-items:center; gap:10px; }
   .pack { border:1px solid var(--line); border-radius:14px; padding:12px 14px; background:#0e1224; display:flex; flex-direction:column; gap:8px; }
@@ -210,7 +215,7 @@
   </div>
 </aside>
 <section id="fxpanel" aria-label="Microcosm effect">
-  <div class="row"><h1>MICROCOSM<small>granular effect · two boxes</small></h1></div>
+  <div class="row"><h1>MICROCOSM<small>granular effect · two boxes</small></h1><button id="kitBtn" type="button" title="Kits: curated sets of Melodic + Rhythmic sounds and effect settings">Kits…</button></div>
   <div class="fxhint" id="fxIdle">Start the engine to use the effect.</div>
   <div class="fxlive">
     <div class="fxtabs" id="fxTabs" role="tablist"></div>
@@ -253,6 +258,16 @@
     <div id="progress"></div>
   </div>
 </main>
+<div id="kits" hidden>
+  <div class="sheet" role="dialog" aria-label="Kits">
+    <header>
+      <h2>Kits<small>Swap the Melodic and Rhythmic sounds. They fade out first, then the new ones are ready; Core synth and the nature samples keep playing.</small></h2>
+      <button id="kitsClose">Close</button>
+    </header>
+    <div id="kitBody"></div>
+    <footer><span>Kits are saved as files in <code>kits/</code>; commit the ones you trust.</span><button id="kitsRescan">Refresh</button></footer>
+  </div>
+</div>
 <div id="packs" hidden>
   <div class="sheet" role="dialog" aria-label="Sample packs">
     <header>

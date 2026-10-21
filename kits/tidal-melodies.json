@@ -1,0 +1,25 @@
+{
+  "name": "Tidal melodies",
+  "description": "Four singing melodies and an arpeggio over the ambient chords, melted by the long-tone effect box.",
+  "melodic": "melody-ambient",
+  "rhythmic": "rhythmic-synth",
+  "order": 2,
+  "micro": {
+    "b": {
+      "preset": "haze",
+      "on": true,
+      "knobs": {
+        "activity": 0.5,
+        "size": 0.55,
+        "repeats": 0.45,
+        "tone": 0.5,
+        "mix": 0.45
+      },
+      "src": [
+        "Melody A \u00b7 Lyrical",
+        "Melody D \u00b7 Bright"
+      ],
+      "muteDry": false
+    }
+  }
+}

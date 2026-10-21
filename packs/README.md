@@ -41,6 +41,7 @@ Add a `pack.json` to set names, roles, colours and levels:
 |---|---|
 | `tempo`, `beatsPerBar` | The pack's master clock. Every loop in a pack must match it. |
 | `key` | Shown on the card. Use `null` for key-less material (field recordings, drones). |
+| `sets` | Optional. `["melodic"]` and/or `["rhythmic"]`: the roles this pack's stems can fill in a **kit** (otherwise guessed from its groups and synths). See README, "Kits". |
 | `order` | Sort position in the list (lower first). |
 | stem `file` | A WAV (checked for length) or mp3/ogg/flac/m4a (not checked), relative to the pack folder. |
 | stem `synth` | Instead of a file: `drone`, `pad`, `sub`, `arp`, `texture`, `pulse`, `bells`, `shimmer`, `atmos` (minor progression), or `mchords`, `mbass`, `marp`, `melody` (progression 1–4–3–6–2–5–1, or the ambient stems' chords when the stem has `"progression": "ambient"`, in the pack's `"mode"`: `"minor"` (default) or `"major"`; 8 bars gives chords of 2,1,1,1,1,1,1 bars; 14 gives 2 bars each), generated in the browser. |

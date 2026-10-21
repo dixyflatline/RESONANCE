@@ -97,7 +97,19 @@ The effect hears the instrument after its own pad settings (cutoff and volume). 
 
 Tip: turn Mix down before you change preset during a quiet moment, and raise **Repeats** slowly. High Repeats on Haze or Tunnel builds a thick wash.
 
-## 7. Rehearsal: simulated audience and monitor
+## 7. Kits: changing the Melodic and Rhythmic sounds during a show
+
+A **kit** is a curated set of sounds you trust: one **sound set** for the Melodic group, one for the Rhythmic group, and optionally the settings of both Microcosm boxes. Loading a kit changes the melodic and rhythmic voices without stopping the show: **Core synth** and the **nature samples** keep playing and sustain the sound while the swap happens.
+
+Click **Kits…** at the top of the effect column. The button then shows the name of the live kit.
+
+- **Saved kits** list their sounds. **Load** fades out the Melodic and Rhythmic stems that are playing (using their normal fade-out times), waits until those groups are silent, then puts the new sounds in. The new sounds start off, ready for the audience or for you to switch on. During the wait phones say "changing sounds…" and cannot start those stems. If something has not faded after 45 seconds the swap happens anyway.
+- **Pick sounds** lets you choose any available sound set for Melodic and Rhythmic from the menus, then **Load these sounds**. “Pack's own” returns that group to the sounds the live pack came with. Sets that don't fit (recorded loops at another tempo, or generated sounds in another harmony such as major) are greyed out with the reason.
+- **Save kit** stores what is live: the Melodic and Rhythmic sets, plus both Microcosm boxes (presets, knobs, which instruments feed A and B). Saving under the same name updates the kit. A kit that has Microcosm settings applies them as soon as its sounds are in; instruments are matched by name.
+
+Kits are plain files in the `kits/` folder (see README). The sounds come from packs: any pack of generated or recorded stems can be a sound set. Rendering the new generated stems takes some seconds after they are swapped in, longer on a slow computer, so load a kit between phrases rather than at a climax.
+
+## 8. Rehearsal: simulated audience and monitor
 
 Use this to practise playing against a changing room, alone. Open **http://localhost:8080/rehearsal** on the machine that runs the server (use `localhost`, not the Wi-Fi address). Nobody else can open it.
 
@@ -114,17 +126,17 @@ The monitor also shows real phones and your own taps, so you can rehearse with a
 
 **Access.** The page answers only to the server machine. If the server has an `ENGINE_KEY`, add `?key=<the key>` to the address to open it from another device.
 
-## 8. Packs, tempo and files
+## 9. Packs, tempo and files
 
 - Packs live in `packs/`. The default, **layers**, combines the core, melodic and rhythmic synths and the field recordings (15 stems). Other packs: see `packs/README.md`. Recorded loops must be a whole number of bars at the pack tempo (50 BPM).
 - Field recordings (`.wav`, about 66 MB in all) are not stored in git. Fetch them with `npm run fetch-stems`.
 - Generated stems need no files; they are built in the browser.
 
-## 9. Deploying online
+## 10. Deploying online
 
 Set `ENGINE_KEY` to a long secret first, then follow `DEPLOY.md`. With a key set, open the engine as `/engine?key=<key>`.
 
-## 10. Troubleshooting
+## 11. Troubleshooting
 
 | Symptom | What to do |
 |---|---|
@@ -138,7 +150,7 @@ Set `ENGINE_KEY` to a long secret first, then follow `DEPLOY.md`. With a key set
 | After a code update nothing changed | Restart the server and reload the engine and phone pages. |
 | `/rehearsal` shows "Not found" | Open it from the server machine using `localhost`, or add `?key=` if the server has a key. |
 
-## 11. Quick reference
+## 12. Quick reference
 
 - Engine: `http://localhost:8080/engine`
 - Audience: the address in the ☰ menu

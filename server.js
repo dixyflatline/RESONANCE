@@ -10,6 +10,7 @@ const os = require('os');
 const { WebSocketServer } = require('ws');
 const { scanPacks, summary, publicGroup } = require('./lib/packs');
 const { Sim } = require('./lib/sim');
+const Kits = require('./lib/kits');
 
 const PORT = Number(process.env.PORT) || 8080;
 // When deployed publicly, set ENGINE_KEY so only you can run the audio engine or send
@@ -34,6 +35,7 @@ function buildId() {
 const ROOT = __dirname;
 const CONFIG_PATH = path.join(ROOT, 'config.json');
 const PACKS_DIR = path.join(ROOT, 'packs');
+const KITS_DIR = path.join(ROOT, 'kits');
 
 // config.json: global settings (default pack, quantize, fades) + fallback tempo/key for packs that don't set their own.
 function loadConfig() { return JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8')); }
@@ -50,6 +52,12 @@ if (!active) {
   console.error('\n  No playable sample packs found in packs/. Add a pack folder (see packs/README.md) or run: npm run fetch-stems\n');
   process.exit(1);
 }
+
+// ---- Kits (see lib/kits.js) ----------------------------------------------
+// `active` is the live pack. When a kit swaps the Melodic / Rhythmic sounds, `active` becomes a copy of `activeBase` (the pack chosen in the pack browser)
+// with those groups' stems replaced; core synth and the nature samples are untouched and keep playing. The swap waits until the groups it changes are silent.
+let activeBase = active, activeKit = null, activePicks = {}, kitRev = 0;
+let kitPending = null; // { kit, picks, roles, since }: the swapped groups are fading out; the new sounds go in once they are silent
 
 // ---- State ---------------------------------------------------------------
 const state = {
@@ -196,6 +204,7 @@ const server = http.createServer((req, res) => {
     return;
   }
   if (p === '/api/config') return json(res, publicConfig());
+  if (p === '/api/kits') return json(res, kitInfo());
   if (p === '/api/packs') { rescan(); return json(res, { active: active.id, packs: packList.map(summary) }); }
   if (p === '/api/state') return json(res, snapshot());
   if (p === '/api/status') return json(res, { started: STARTED, uptime: Math.round((Date.now() - STARTED) / 1000), build: buildId(), supervised: SUPERVISED, node: process.version, pack: active.id, packs: packList.length, clients: snapshot().clients, engine: snapshot().engine });
@@ -238,7 +247,7 @@ const wss = new WebSocketServer({ server, path: '/ws', maxPayload: 1024 * 1024 }
 
 function publicConfig() {
   return {
-    pack: { id: active.id, name: active.name, description: active.description },
+    pack: { id: active.id, name: active.name, description: active.description, rev: kitRev, kit: activeKit ? { id: activeKit.id, name: activeKit.name, micro: activeKit.micro || null } : null },
     tempo: active.tempo, beatsPerBar: active.beatsPerBar, quantize: config.quantize,
     fade: config.fade, fadeIn: config.fadeIn, fadeOut: config.fadeOut, key: active.key, mode: active.mode, seed: active.seed,
     stems: active.stems, groups: (active.groups || []).map(publicGroup), lanUrls: lanUrls(), build: buildId(),
@@ -260,6 +269,7 @@ function snapshot() {
     pending: pendingSnapshot(),
     plays: playsSnapshot(),
     engine: !!(engineSocket && engineSocket.readyState === 1),
+    kitPending: kitPending ? { name: kitPending.kit.name, roles: kitPending.roles } : null,
     clients, simClients,
   };
 }
@@ -276,12 +286,56 @@ function broadcastState() { broadcast(snapshot()); }
 
 // Make `next` the live pack for everyone: clients rebuild their grids, the engine fades out and loads it.
 function setActive(next, source) {
-  active = next;
+  active = activeBase = next; activeKit = null; activePicks = {}; kitPending = null; kitRev++;
   state.active.clear(); state.playing.clear(); state.xy = {}; notesCache.clear(); clearTimers(); resetShow();
   log(`${source} pack -> ${next.id} (${next.stems.length} stems, ${next.tempo} BPM)`);
   broadcast({ type: 'config', ...publicConfig() });
   broadcastState();
 }
+
+// ---- Kit swap ----
+const kitGroupIds = (roles) => (activeBase.stems || []).concat(active.stems).filter((s) => roles.includes(s.group)).map((s) => s.id);
+const kitBlocked = (id) => !!(kitPending && active.stems.some((s) => s.id === id && kitPending.roles.includes(s.group)));
+function kitList() { return Kits.scanKits(KITS_DIR); }
+function kitInfo() {
+  rescan();
+  const cat = Kits.catalog(activeBase, packList, activePicks);
+  return { canKit: cat.canKit, roles: cat.roles, kits: kitList(), current: { kit: activeKit && activeKit.id, picks: activePicks }, pending: kitPending ? { name: kitPending.kit.name, roles: kitPending.roles } : null, base: activeBase.id };
+}
+/** Ask for a kit: { id } (a saved kit) or { melodic, rhythmic, name?, micro? } (picks). The groups that change fade out first. */
+function requestKit(msg, source) {
+  let kit = null;
+  if (msg.id) { kit = kitList().find((k) => k.id === String(msg.id)); if (!kit) return log(`kit "${msg.id}" not found`); }
+  else kit = { id: null, name: String(msg.name || 'Custom sounds').slice(0, 60), melodic: msg.melodic ? String(msg.melodic) : null, rhythmic: msg.rhythmic ? String(msg.rhythmic) : null, micro: Kits.cleanMicro(msg.micro) };
+  const picks = {}; for (const r of Kits.ROLES) if (kit[r]) picks[r] = kit[r]; // a role the kit does not name goes back to the live pack's own sounds
+  const r = Kits.compose(activeBase, picks, packList, {});
+  if (r.error) { log(`kit "${kit.name}" refused: ${r.error}`); toMonitors({ type: 'act', t: Date.now(), kind: 'kit-refused', who: source, source, reason: r.error }); return; }
+  const same = (role) => (picks[role] || null) === (activePicks[role] || null);
+  const roles = Kits.ROLES.filter((role) => !same(role));
+  kitPending = { kit, picks, roles, since: Date.now() };
+  log(`${source} kit -> ${kit.name}${roles.length ? ` (fading out ${roles.join(' + ')} first)` : ''}`);
+  for (const id of kitGroupIds(roles)) switchOff(id, 'kit change');
+  broadcastState(); checkKit();
+}
+function checkKit() {
+  if (!kitPending) return;
+  const engineUp = !!(engineSocket && engineSocket.readyState === 1);
+  const ids = kitGroupIds(kitPending.roles);
+  const silent = !ids.some((id) => state.playing.has(id));
+  if (silent || !engineUp || Date.now() - kitPending.since > 45000) applyKit();
+}
+function applyKit() {
+  const { kit, picks, roles } = kitPending; kitPending = null;
+  const r = Kits.compose(activeBase, picks, packList, {});
+  if (r.error) { log(`kit "${kit.name}" failed: ${r.error}`); broadcastState(); return; }
+  const gone = kitGroupIds(roles);
+  for (const id of gone) { state.active.delete(id); state.playing.delete(id); delete state.xy[id]; notesCache.delete(id); startedAt.delete(id); lastChange.delete(id); pendingTaps.delete(id); clearTimeout(decayTimers.get(id)); decayTimers.delete(id); plays.delete(id); }
+  active = r.pack; activePicks = picks; activeKit = kit.id ? kit : { id: null, name: kit.name, micro: kit.micro }; kitRev++;
+  log(`kit "${kit.name}" is live (${roles.length ? roles.map((x) => `${x}: ${picks[x] || 'default'}`).join(', ') : 'sounds unchanged'})`);
+  broadcast({ type: 'config', ...publicConfig() });
+  broadcastState();
+}
+setInterval(checkKit, 1000);
 
 // Single entry point for every musical input (taps, HTTP, future sensors).
 function handleInput(msg, source, sender) {
@@ -293,9 +347,17 @@ function handleInput(msg, source, sender) {
       if (next.id !== active.id || msg.reload) { setActive(next, source); act(source, sender, 'pack', { pack: next.id }); }
       return;
     }
+    case 'kit': if (source !== 'client') requestKit(msg, source); return; // load a kit (engine / sensor / HTTP only)
+    case 'kitSave': { // save what is live as a kit file (engine / HTTP only)
+      if (source === 'client') return;
+      const k = Kits.saveKit(KITS_DIR, { name: msg.name, description: msg.description, melodic: activePicks.melodic, rhythmic: activePicks.rhythmic, micro: msg.micro });
+      if (k) { log(`${source} saved kit "${k.name}"`); activeKit = { id: k.id, name: k.name, micro: k.micro }; broadcast({ type: 'config', ...publicConfig() }); }
+      return;
+    }
     case 'toggle': {
       const id = Number(msg.stem);
       if (!validStem(id)) return;
+      if (kitBlocked(id)) { if (sender && source === 'client') deny(sender, id, 'The sounds are changing…'); return; }
       if (state.finale) return; // the show is ending: nothing can be started until a new show
       if (source === 'client') { if (!audienceToggle(id, sender)) { if (Object.keys(pendingSnapshot()).length) broadcastState(); return; } }
       else state.active.has(id) ? switchOff(id, source) : switchOn(id, false);
@@ -304,6 +366,7 @@ function handleInput(msg, source, sender) {
     case 'set': { // explicit on/off (idempotent; handy for sensor rules)
       const id = Number(msg.stem);
       if (!validStem(id)) return;
+      if (kitBlocked(id)) return;
       if (state.finale) return;
       msg.on ? (state.active.has(id) || switchOn(id, false)) : switchOff(id, source);
       break;
@@ -397,7 +460,7 @@ wss.on('connection', (ws, req) => {
     if (ws.role === 'engine') {
       if (msg.type === 'claim') { claimEngine(ws); return; } // Start was pressed on this page
       if (ws !== engineSocket && (msg.type === 'playing' || msg.type === 'tick' || msg.type === 'reseed')) return; // a standby page is not the engine
-      if (msg.type === 'playing') { state.playing = new Set(msg.playing.map(Number)); broadcastState(); }
+      if (msg.type === 'playing') { state.playing = new Set(msg.playing.map(Number)); broadcastState(); checkKit(); }
       else if (msg.type === 'tick') broadcast(msg); // beat clock for client UIs
       else if (msg.type === 'sched') { // a layer was scheduled to come in at this beat: the phones' piano roll marks it
         if (ws !== engineSocket || !msg.at || typeof msg.at !== 'object') return;
@@ -408,7 +471,7 @@ wss.on('connection', (ws, req) => {
         const out = { type: 'notes', stem: Number(msg.stem), beats: Number(msg.beats), notes: msg.notes }; notesCache.set(out.stem, out);
         const s = JSON.stringify(out); for (const c of wss.clients) if (c.role === 'client') send(c, s);
       }
-      else if (msg.type === 'reseed') { active.seed = msg.seed; active.key = msg.key || active.key; }
+      else if (msg.type === 'reseed') { for (const pk of [active, activeBase]) { pk.seed = msg.seed; pk.key = msg.key || pk.key; } }
       else handleInput(msg, 'engine', ws);
       return;
     }
