@@ -7,7 +7,7 @@
 <style>
   :root { --bg:#0a0c14; --panel:#121626; --line:#232a40; --text:#e6e9f2; --muted:#8a93ad; --accent:#7fb3ff; }
   * { box-sizing: border-box; }
-  body { margin:0; background:var(--bg); color:var(--text); font:14px/1.45 system-ui,-apple-system,Segoe UI,sans-serif; height:100vh; display:grid; grid-template-columns: 360px 1fr; }
+  body { margin:0; background:var(--bg); color:var(--text); font:14px/1.45 system-ui,-apple-system,Segoe UI,sans-serif; height:100vh; display:grid; grid-template-columns: 360px 300px 1fr; }
   aside { background:var(--panel); border-right:1px solid var(--line); padding:18px; overflow:auto; display:flex; flex-direction:column; gap:16px; }
   h1 { font-size:13px; letter-spacing:.35em; margin:0; font-weight:600; }
   h1 small { display:block; letter-spacing:.1em; color:var(--muted); font-weight:400; margin-top:4px; }
@@ -17,10 +17,20 @@
   #urls a { color:var(--accent); font-family:ui-monospace,Menlo,monospace; font-size:13px; }
   #conn.ok { color:#6fd39b; } #conn.bad { color:#ef8a7a; }
   select, input[type=range] { width:100%; }
-  .fxbox { border:1px solid var(--line); border-radius:10px; padding:8px 10px; display:flex; flex-direction:column; gap:8px; } .fxbox[open] { gap:10px; }
-  .fxbox summary { display:flex; justify-content:space-between; align-items:center; cursor:pointer; list-style:none; } .fxbox summary::-webkit-details-marker { display:none; }
-  .fxbox summary button { padding:3px 12px; } .fxbox summary button[aria-pressed=true] { border-color:var(--accent); background:#18284a; }
-  .fxbox > select, .fxbox > .grid2, .fxbox > label { margin-top:8px; } .fxblurb { color:var(--muted); font-size:12px; margin-top:6px; min-height:2.6em; }
+  /* the Microcosm panel: a column between the stem list and the visuals */
+  #fxpanel { background:#0e1224; border-right:1px solid var(--line); padding:18px; overflow:auto; display:flex; flex-direction:column; gap:14px; }
+  #fxpanel .fxlive { display:flex; flex-direction:column; gap:14px; }
+  #fxpanel:not(.live) .fxlive { opacity:.4; pointer-events:none; }
+  #microOn { padding:5px 16px; font-weight:650; } #microOn[aria-pressed=true] { border-color:var(--accent); background:#27406e; color:#fff; box-shadow:0 0 12px rgba(127,179,255,.35); }
+  .fxsrc { border:1px solid var(--line); border-radius:12px; padding:10px 12px; display:flex; flex-direction:column; gap:8px; background:#0b0e1c; }
+  .fxsrcname { font-size:18px; font-weight:650; display:flex; align-items:center; gap:8px; min-height:1.4em; } .fxsrcname i { width:12px; height:12px; border-radius:50%; background:var(--c,#7fb3ff); flex:none; box-shadow:0 0 10px var(--c,#7fb3ff); }
+  .fxhint { color:var(--muted); font-size:12px; } .fxchk { display:flex; gap:8px; align-items:center; font-size:13px; } .fxchk input { flex:none; }
+  .fxpresets { display:grid; grid-template-columns:1fr 1fr; gap:6px; }
+  .fxpreset { display:flex; flex-direction:column; align-items:flex-start; gap:1px; padding:8px 10px; text-align:left; } .fxpreset b { font-size:14px; } .fxpreset small { color:var(--muted); font-size:11px; letter-spacing:.04em; }
+  .fxpreset[aria-pressed=true] { border-color:var(--accent); background:#18284a; box-shadow:0 0 0 1px var(--accent) inset; }
+  .fxblurb { color:var(--muted); font-size:12px; min-height:3.6em; }
+  .fxknobs { display:flex; flex-direction:column; gap:10px; } .fxknobs label > .label { display:flex; justify-content:space-between; }
+  .fxbtn { align-self:center; flex:none; padding:4px 8px; font-size:11px; font-weight:650; letter-spacing:.06em; border-radius:8px; } .fxbtn.on { background:var(--c); border-color:var(--c); color:#0a0c14; box-shadow:0 0 10px var(--c); }
   select { background:#0d1020; color:var(--text); border:1px solid var(--line); border-radius:6px; padding:6px; }
   button { font:inherit; color:var(--text); background:#1b2136; border:1px solid var(--line); border-radius:8px; padding:8px 10px; cursor:pointer; }
   button:hover { border-color:#3a4566; }
@@ -116,7 +126,7 @@
   select:disabled, button:disabled { opacity:.6; }
   #dock { position:sticky; bottom:-18px; margin:0 -18px -18px; padding:12px 18px; background:var(--panel); border-top:1px solid var(--line); display:grid; grid-template-columns:1.4fr 1fr; gap:8px; z-index:3; box-shadow:0 -10px 18px rgba(0,0,0,.35); }
   #dock #regen { background:#27406e; border-color:#3d5f9c; font-weight:600; }
-  @media (max-width: 800px) { body { grid-template-columns:1fr; grid-template-rows:auto 60vh; height:auto; } }
+  @media (max-width: 1000px) { body { grid-template-columns:1fr; grid-template-rows:auto auto 60vh; height:auto; } #fxpanel { border-right:0; border-top:1px solid var(--line); border-bottom:1px solid var(--line); } }
 #bpmRow{display:flex;align-items:center;gap:4px}#bpmRow input{flex:1;min-width:0}#bpmRow button{width:40px;padding:6px 0;font-size:20px;line-height:1}#bpmNow{font-size:26px;margin-left:6px;vertical-align:middle}#bpmTgt{margin-left:8px}
 #xmlBox{display:flex;flex-direction:column;gap:6px}#xmlBox button{padding:7px 6px;font-size:12px}#xmlInfo b{color:var(--text)}#xmlInfo .warn{color:#e8a33d}
 </style>
@@ -187,16 +197,6 @@
     <label><span class="label">Fade in <span id="fadeInVal"></span></span><input id="fadeIn" type="range" min="0.5" max="16" step="0.5" value="4"></label>
     <label><span class="label">Fade out <span id="fadeOutVal"></span></span><input id="fadeOut" type="range" min="0.5" max="16" step="0.5" value="4"></label>
   </div>
-  <details id="micro" class="fxbox">
-    <summary><span class="label">Microcosm effect box</span> <button id="microOn" type="button" aria-pressed="false">Off</button></summary>
-    <select id="microPreset" aria-label="Effect preset"></select>
-    <div id="microBlurb" class="fxblurb"></div>
-    <div class="grid2"><label><span class="label">Activity <span id="mv_activity"></span></span><input id="mk_activity" type="range" min="0" max="1" step="0.01"></label>
-    <label><span class="label">Size <span id="mv_size"></span></span><input id="mk_size" type="range" min="0" max="1" step="0.01"></label>
-    <label><span class="label">Repeats <span id="mv_repeats"></span></span><input id="mk_repeats" type="range" min="0" max="1" step="0.01"></label>
-    <label><span class="label">Tone <span id="mv_tone"></span></span><input id="mk_tone" type="range" min="0" max="1" step="0.01"></label></div>
-    <label><span class="label">Mix <span id="mv_mix"></span></span><input id="mk_mix" type="range" min="0" max="1" step="0.01"></label>
-  </details>
   <label><span class="label">Brightness (sensor-ready param)</span><input id="bright" type="range" min="0" max="1" step="0.01" value="0.85"></label>
   <label><span class="label">Master volume</span><input id="vol" type="range" min="0" max="1.2" step="0.01" value="0.9"></label>
   <button id="export" title="Download the generated stems as WAV loops">Export WAVs</button>
@@ -205,6 +205,29 @@
     <button id="stopAll" class="danger">Stop all</button>
   </div>
 </aside>
+<section id="fxpanel" aria-label="Microcosm effect">
+  <div class="row"><h1>MICROCOSM<small>granular effect · one instrument in</small></h1><button id="microOn" type="button" aria-pressed="false" title="Effect on / off">Off</button></div>
+  <div class="fxhint" id="fxIdle">Start the engine to use the effect.</div>
+  <div class="fxlive">
+    <div class="fxsrc">
+      <span class="label">Source (the instrument that goes in)</span>
+      <div class="fxsrcname" id="fxSrcName"></div>
+      <select id="fxSource" aria-label="Effect source"></select>
+      <label class="fxchk" title="Silences the source's normal sound so you hear only what comes out of the effect. Applies while the effect is on."><input type="checkbox" id="fxMuteDry"><span>Mute the dry source (effect only)</span></label>
+      <div class="fxhint">Click <b>FX</b> beside an instrument in the sidebar to send it in.</div>
+    </div>
+    <div class="label">Effect</div>
+    <div class="fxpresets" id="fxPresets"></div>
+    <div id="microBlurb" class="fxblurb"></div>
+    <div class="fxknobs">
+      <label><span class="label">Activity <span id="mv_activity"></span></span><input id="mk_activity" type="range" min="0" max="1" step="0.01"></label>
+      <label><span class="label">Size <span id="mv_size"></span></span><input id="mk_size" type="range" min="0" max="1" step="0.01"></label>
+      <label><span class="label">Repeats <span id="mv_repeats"></span></span><input id="mk_repeats" type="range" min="0" max="1" step="0.01"></label>
+      <label><span class="label">Tone <span id="mv_tone"></span></span><input id="mk_tone" type="range" min="0" max="1" step="0.01"></label>
+      <label><span class="label">Mix <span id="mv_mix"></span></span><input id="mk_mix" type="range" min="0" max="1" step="0.01"></label>
+    </div>
+  </div>
+</section>
 <main>
   <canvas id="viz"></canvas>
   <div id="chordPanel" hidden>
