@@ -54,8 +54,9 @@ Only one engine tab plays. The page that presses Start becomes the engine and an
 
 Each phone shows one button per layer the audience may use. The core synth layers (Drone, Pad, Atmos, Noise) are yours only and do not appear.
 
-**Tapping a layer** opens its sheet:
+**Tapping a layer** opens its sheet, and if the layer is off it also switches it on (it comes in on the next beat or bar; the switch in the sheet turns it off again). The nature samples and the Gong are the exception: they only react to a vote. The sheet has:
 
+- **The piano roll** (the strip above the pad). The notes of this layer scroll toward the white "now" line from the right, about two bars ahead, so you can see a sound coming before you hear it. A note lights up as it plays. When you have just switched the layer on, a dashed line marks where it comes in (the label counts the beats) and the notes before that line are only outlines. If the layer is off, you see its notes as outlines, as a preview. Moving the pad's complexity adds and removes notes in the roll as you drag. Short ticks along the top are percussion hits; for the Arp and Bells, a longer bar is a note that rings longer. The strip appears once the engine has started; it does not appear for the nature samples and the Gong.
 - **The pad.** Drag across it: left–right is complexity (from sparse to dense), up–down is the filter (closed at the bottom, open at the top). Double-tap to reset.
 - **The volume fader** on the side.
 - **The switch** brings the layer in or out. It always responds: while it waits for the next bar the sheet says so.
@@ -94,7 +95,7 @@ Use this to practise playing against a changing room, alone. Open **http://local
 
 1. Make sure the engine is started.
 2. Press **Start rehearsal**. Five simulated people join. They follow the same rules as real phones.
-3. Pick the room: **Calm room**, **Busy room**, **Storm**, or **Waves** (the room breathes between calm and busy every few minutes). The **Activity** slider sets the level. Tick **People come and go** to change the crowd size.
+3. Pick the room: **Calm room**, **Busy room**, **Storm**, or **Waves** (the room breathes between calm and busy every few minutes). The **Activity** slider sets the level (100% is each person's normal pace, 200% twice as often, 0% silent). In **Calm room** the pad handles also glide: they never stop and never turn sharply, they drift in slow curves and ease back from the edges, and the volume drifts gently too. The other rooms move in quick straight steps with pauses. Tick **People come and go** to change the crowd size.
 4. Change a person's style with the menu on their card, or untick *in* to send them out. Styles: *Explorer*, *Tweaker*, *Rhythm lover*, *Calm listener*, *Mischief*.
 5. Watch the monitor. The stem board shows what is off, waiting for the bar, sounding, or in a vote, plus each pad position and who touched it last. The group lines show limits (for example "2 of 3 on"). The log lists every action, including refusals. Tick *pad moves* to see them. The chart shows how busy the last 3 minutes were.
 6. Play the engine page against them.

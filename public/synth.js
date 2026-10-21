@@ -438,7 +438,12 @@
   }
 
   // A sustained voice: several detuned oscillators through a gain that swells.
+  /* Note recorder for the phones' piano roll. While a complexity layer is rendered, ctx.__ev collects [start s, length s, pitch (MIDI; null = a percussive tick)]
+     for every note actually built in that layer. renderStem turns them into beats and attaches them to the buffer. */
+  const rec = (ctx, t, d, p) => { if (ctx.__ev) ctx.__ev.push([t, d, p]); };
+  const f2p = (f) => 69 + 12 * Math.log2(f / 440);
   function padVoice(ctx, dest, { t, dur, xf, freq, types = ['sawtooth', 'sawtooth'], detune = 8, gain = 0.1, pan = 0 }) {
+    rec(ctx, t, dur, f2p(freq));
     const g = ctx.createGain(); swell(g.gain, t, dur, xf, gain);
     const p = ctx.createStereoPanner(); p.pan.value = pan;
     g.connect(p).connect(dest);
@@ -485,6 +490,7 @@
   }
 
   function pluck(ctx, dest, { t, freq, gain = 0.2, decay = 1.2, type = 'triangle', pan = 0, attack = 0.006 }) {
+    rec(ctx, t, Math.min(5, decay * 0.6), f2p(freq));
     const g = ctx.createGain();
     g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(gain, t + attack);
     g.gain.exponentialRampToValueAtTime(0.0001, t + decay);
@@ -497,6 +503,7 @@
   }
 
   function bell(ctx, dest, { t, freq, gain = 0.15, decay = 5, pan = 0, attack = 0.004 }) {
+    rec(ctx, t, Math.min(5, decay * 0.6), f2p(freq));
     const car = ctx.createOscillator(); car.frequency.value = freq;
     const mod = ctx.createOscillator(); mod.frequency.value = freq * 3.5;
     const mg = ctx.createGain();
@@ -520,6 +527,7 @@
   }
 
   function thump(ctx, dest, { t, gain = 0.6, f0 = 95, f1 = 42, decay = 0.45 }) {
+    rec(ctx, t, decay * 0.5, f2p(f0));
     const o = ctx.createOscillator(); o.type = 'sine';
     o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(f1, t + 0.12);
     const g = ctx.createGain();
@@ -529,6 +537,7 @@
   }
 
   function noiseHit(ctx, dest, noise, { t, gain = 0.05, decay = 0.08, hp = 6000, pan = 0, offset = 0 }) {
+    rec(ctx, t, Math.max(decay, 0.1), null);
     const s = ctx.createBufferSource(); s.buffer = noise;
     const f = ctx.createBiquadFilter(); f.type = 'highpass'; f.frequency.value = hp;
     const g = ctx.createGain();
@@ -599,6 +608,7 @@
      on each note and settles, a little tanh warmth, and a slow vibrato that fades in. Notes in a phrase are joined by a long
      exponential glide (portamento) that takes 55-80% of the new note; the first note scoops up into pitch from two semitones below over 1.2 s and the sound fades in over 2.2 s. */
   function glideLead(ctx, dest, { notes, pan = -0.15, gain = 0.1, rnd }) {
+    for (const nt of notes) rec(ctx, nt.t, nt.d, nt.n);
     const t0 = notes[0].t, last = notes[notes.length - 1], tEnd = last.t + last.d;
     const amp = ctx.createGain(); amp.gain.setValueAtTime(0, t0); amp.gain.linearRampToValueAtTime(gain, t0 + 2.2); // enters gently: a 2.2 s fade-in
     amp.gain.setValueAtTime(gain, Math.max(t0 + 2.3, tEnd - 0.8)); amp.gain.setTargetAtTime(0, Math.max(t0 + 2.3, tEnd - 0.8), 0.7);
@@ -631,6 +641,7 @@
      are louder. Everything is slow: a 4 s fade-in with the filter closed at first, slides that take 55-80% of the note, a 0.5 s release. Long notes also get a slow filter "wail" halfway through, and a slow LFO drifts the cutoff. Notes that join a
      phrase are 303-style slides, slowed right down: the glide takes 55-80% of the note, with the gate held (no new attack). */
   function acidVoice(ctx, dest, { notes, pan = 0.2, gain = 0.08, rnd, L, bar }) {
+    for (const nt of notes) rec(ctx, nt.t, nt.d, nt.n);
     const t0 = notes[0].t, last = notes[notes.length - 1], tEnd = last.t + last.d, end = tEnd + 4;
     const o = ctx.createOscillator(); o.type = rnd() < 0.7 ? 'sawtooth' : 'square';
     const lp1 = ctx.createBiquadFilter(); lp1.type = 'lowpass'; lp1.Q.value = 10;
@@ -831,6 +842,7 @@
       wetSend.connect(dl).connect(d1); d1.connect(p1).connect(out); d1.connect(fb1).connect(d2); d2.connect(p2).connect(out); d2.connect(fb2).connect(d1);
       d1.connect(verb.in(1.2));
       const note = (t, dur, midi, { gain = 0.5, attack, release, from = null, slideSec = 0 }) => {
+        rec(ctx, t, dur, midi);
         const g = ctx.createGain(), end = t + dur;
         const a = Math.min(attack, dur * 0.5), r = release;
         g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(gain, t + a);
@@ -1103,6 +1115,7 @@
       : roomy ? makeSpaceIR(sampleRate, 3, hash(`ir:${seed}`), { pre: 0.008, rt60: 2.2, hiStart: 7000, hiEnd: 900, hiTau: 0.8, onset: 0.012, taps: 5 })
       : makeSpaceIR(sampleRate, 9, hash(`ir:${seed}`));
 
+    if (tier !== null) ctx.__ev = []; /* only the complexity layers of the audience stems are recorded for the piano roll */
     const out = ctx.createGain(); out.connect(ctx.destination);
     const conv = ctx.createConvolver(); conv.buffer = ir;
     if (lush.verb && !roomy) { const cut = ctx.createBiquadFilter(); cut.type = 'highpass'; cut.frequency.value = 150; cut.Q.value = 0.5; conv.connect(cut); cut.connect(out); } else conv.connect(out);
@@ -1142,6 +1155,7 @@
       const k = 0.95 / peak;
       for (let ch = 0; ch < 2; ch++) { const d = loop.getChannelData(ch); for (let i = 0; i < N; i++) d[i] *= k; }
     }
+    if (ctx.__ev) loop.noteEvents = ctx.__ev.filter((e) => e[0] >= 0 && e[0] < L - 1e-6).map(([t, d, p]) => [+(t / beat).toFixed(3), +Math.max(d / beat, 0.05).toFixed(3), p === null ? null : +p.toFixed(1)]); /* in beats, so they stay right when the tempo changes */
     return loop;
   }
 
@@ -1159,6 +1173,8 @@
     for (let ch = 0; ch < 2; ch++) for (let i = 0; i < n; i++) peak = Math.max(peak, Math.abs(d[0][ch][i] + d[1][ch][i] + d[2][ch][i])); /* the loudest the three layers get together */
     if (peak > 0.95) { const k = 0.95 / peak; for (const c of d) for (const a of c) for (let i = 0; i < n; i++) a[i] *= k; }
     bufs[0].layers = [bufs[1], bufs[2]];
+    /* the piano roll: every note with the layer it belongs to, [start beat, length in beats, pitch, layer], and the loop length in beats */
+    bufs[0].roll = { beats: bufs[0].duration / (60 / opts.tempo), notes: bufs.flatMap((b, k) => (b.noteEvents || []).map((e) => [...e, k])).sort((a, b) => a[0] - b[0]) };
     return bufs[0];
   }
 

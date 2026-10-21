@@ -234,7 +234,7 @@ function json(res, obj) {
 }
 
 // ---- WebSocket hub -------------------------------------------------------
-const wss = new WebSocketServer({ server, path: '/ws', maxPayload: 16 * 1024 });
+const wss = new WebSocketServer({ server, path: '/ws', maxPayload: 1024 * 1024 } /* the engine sends each stem's notes (about 10 KB) for the phones' piano roll; phones' own messages are capped below */);
 
 function publicConfig() {
   return {
@@ -244,6 +244,8 @@ function publicConfig() {
     stems: active.stems, groups: (active.groups || []).map(publicGroup), lanUrls: lanUrls(), build: buildId(),
   };
 }
+
+const notesCache = new Map(); // stem id -> the latest { type: 'notes', ... } from the engine
 
 function snapshot() {
   let clients = 0, simClients = 0;
@@ -275,7 +277,7 @@ function broadcastState() { broadcast(snapshot()); }
 // Make `next` the live pack for everyone: clients rebuild their grids, the engine fades out and loads it.
 function setActive(next, source) {
   active = next;
-  state.active.clear(); state.playing.clear(); state.xy = {}; clearTimers(); resetShow();
+  state.active.clear(); state.playing.clear(); state.xy = {}; notesCache.clear(); clearTimers(); resetShow();
   log(`${source} pack -> ${next.id} (${next.stems.length} stems, ${next.tempo} BPM)`);
   broadcast({ type: 'config', ...publicConfig() });
   broadcastState();
@@ -367,6 +369,7 @@ wss.on('connection', (ws, req) => {
   ws.isAlive = true;
   ws.cid = Math.random().toString(36).slice(2, 10); // identifies this participant for group rules
   ws.on('pong', () => { ws.isAlive = true; });
+  ws.on('error', (e) => { log(`${ws.role} socket error: ${e.message}`); }); /* a bad frame must never take the server down */
   if (ws.role !== 'client' && !keyOk(url.searchParams.get('key'))) {
     log(`${ws.role} rejected: bad or missing engine key`);
     return ws.close(4001, 'engine key required');
@@ -384,9 +387,11 @@ wss.on('connection', (ws, req) => {
   if (ws.role === 'client') act('client', ws, 'join', {});
 
   send(ws, { type: 'config', ...publicConfig() });
+  if (ws.role === 'client') for (const n of notesCache.values()) send(ws, n);
   broadcastState();
 
   ws.on('message', (data) => {
+    if (ws.role !== 'engine' && data.length > 4096) return; // phones, sensors and monitors only send small messages
     let msg;
     try { msg = JSON.parse(data); } catch { return; }
     if (ws.role === 'engine') {
@@ -394,6 +399,15 @@ wss.on('connection', (ws, req) => {
       if (ws !== engineSocket && (msg.type === 'playing' || msg.type === 'tick' || msg.type === 'reseed')) return; // a standby page is not the engine
       if (msg.type === 'playing') { state.playing = new Set(msg.playing.map(Number)); broadcastState(); }
       else if (msg.type === 'tick') broadcast(msg); // beat clock for client UIs
+      else if (msg.type === 'sched') { // a layer was scheduled to come in at this beat: the phones' piano roll marks it
+        if (ws !== engineSocket || !msg.at || typeof msg.at !== 'object') return;
+        const s = JSON.stringify({ type: 'sched', at: msg.at }); for (const c of wss.clients) if (c.role === 'client') send(c, s);
+      }
+      else if (msg.type === 'notes') { // the notes of a stem, for the phones' piano roll: kept for phones that join later, sent to phones only
+        if (ws !== engineSocket || !Array.isArray(msg.notes) || msg.notes.length > 3000 || !Number.isFinite(Number(msg.stem)) || !(Number(msg.beats) > 0)) return;
+        const out = { type: 'notes', stem: Number(msg.stem), beats: Number(msg.beats), notes: msg.notes }; notesCache.set(out.stem, out);
+        const s = JSON.stringify(out); for (const c of wss.clients) if (c.role === 'client') send(c, s);
+      }
       else if (msg.type === 'reseed') { active.seed = msg.seed; active.key = msg.key || active.key; }
       else handleInput(msg, 'engine', ws);
       return;

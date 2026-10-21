@@ -259,6 +259,10 @@ Practise playing against a changing room without a room full of people. Open **h
 - **Access:** the page, `/api/sim` and the monitor socket answer only to the machine the server runs on (a request that arrives through a proxy counts as remote). With `ENGINE_KEY` set they answer to anyone with the key (`/rehearsal?key=…`). Everyone else gets the same 404 as for any page that does not exist, so phones cannot reach it. Use `localhost`, not the Wi-Fi address, on the same machine.
 - Files: `lib/sim.js` (the simulator), `admin/rehearsal.html` (the page; it lives outside `public/` so it is never served as a plain file), server routes in `server.js`.
 
+## Piano roll on the phones
+
+While the engine renders a layer that has complexity, `synth.js` records every note it builds (`rec()` in the leaf voices: pluck, bell, thump, noise hit, pad, glide and acid leads, sub notes) as `[start beat, length in beats, pitch, layer]` in beats, so a tempo change keeps them right. `renderStem` attaches them to the buffer as `roll`. The engine sends them to the server as `notes` messages (one per stem, again whenever it renders, and again after a reconnect or claim), and the server keeps the latest per stem for phones that join later and forwards them to phones only. The engine's `tick` message carries `n` (the beat count since the loop start) and `bpm`, which the phone runs a local clock on (nudged toward each tick). When a layer is switched on, the engine also sends `sched` with the beat where it will come in, so the phone can mark the entry line exactly. `public/roll.js` draws the strip; the pad sheet in `xy.js` hosts it when the page passes a `rollView(id)` function (the phone page does, the engine page does not).
+
 ## Microcosm effect box
 
 A separate granular effect, in the spirit of the Hologram Electronics Microcosm pedal (`public/microcosm.js`, an AudioWorklet; a new implementation, not the pedal's code). It listens to the mix, keeps the last 12 seconds and plays it back as swarms of tiny grains, with feedback, a tone filter and a reverb. It is a wet-only send: the engine takes it after the brightness filter and returns it just before the compressor, so the dry mix is never touched. It is **off** when the engine starts.
@@ -374,6 +378,7 @@ public/engine.js   clock, scheduling, voices, visual
 public/synth.js    procedural ambient stem generator + WAV export
 public/client.html audience controller
 public/xy.js       the pad (complexity + cutoff) and volume fader sheet, shared by both pages
+public/roll.js     the rolling piano roll drawn in the phone's pad sheet (notes come from the engine's render, see below)
 packs/             sample packs (one folder each; see packs/README.md)
 ```
 

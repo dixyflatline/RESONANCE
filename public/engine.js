@@ -45,7 +45,7 @@
   // ---------------- WebSocket ----------------
   function connect() {
     ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws?role=engine&standby=1&key=${encodeURIComponent(engineKey)}`); // standby: opening the page does not take over from a running engine; pressing Start does
-    ws.onopen = () => { setConn(true); if (started) send({ type: 'claim' }); /* a reconnect of the running engine */ };
+    ws.onopen = () => { setConn(true); if (started) { send({ type: 'claim' }); sendAllRolls(); } /* a reconnect of the running engine */ };
     ws.onclose = (e) => {
       setConn(false);
       if (e.code === 4001) { alertBanner('This server needs the engine key. Open this page as /engine?key=YOUR_ENGINE_KEY'); return; }
@@ -254,7 +254,7 @@
     setInterval(clockLoop, 15);
     requestAnimationFrame(draw);
     /* Every engine start begins silent: drop whatever was left active on the server (audience taps made before the start, a previous run) */
-    send({ type: 'claim' }); send({ type: 'stopAll' }); send({ type: 'newShow' }); desired = new Set(); runStart = null; runEnded = false;
+    send({ type: 'claim' }); sendAllRolls(); send({ type: 'stopAll' }); send({ type: 'newShow' }); desired = new Set(); runStart = null; runEnded = false;
     if (cfg.pack && cfg.pack.id !== curPackId) await switchPack(); // pack changed while we were loading
     else reconcile();
   }
@@ -459,16 +459,18 @@
   function reconcile() {
     if (stale) { if (desired.size) freshen().then(() => { if (!stale) reconcile(); }); return; }
     const when = nextBoundary();
-    const leaving = [];
+    const leaving = [], sched = {};
     for (const [id, st] of stems) {
       if (!st.buffer) continue;
       const want = desired.has(id);
-      if (want && !st.voice) st.voice = startVoice(st, st.def.oneShot ? nextBoundary(barLen()) : when); /* a strike always lands on a bar line */
+      if (want && !st.voice) { st.voice = startVoice(st, st.def.oneShot ? nextBoundary(barLen()) : when); /* a strike always lands on a bar line */
+        if (st.roll) sched[id] = +((when - t0) / beatLen()).toFixed(3); } /* the phones' piano roll shows where the layer comes in (in beats on the same clock as the ticks) */
       else if (!want && st.voice) {
         if (st.voice.end && st.voice.end <= ctx.currentTime) { st.voice = null; st.stopUntil = 0; } /* a finished strike: nothing to fade */
         else leaving.push(st);
       }
     }
+    if (Object.keys(sched).length) send({ type: 'sched', at: sched });
     const ranks = [...new Set(leaving.map(exitRank))].sort((a, b) => a - b);   /* only the stages that are actually used, one bar apart */
     for (const st of leaving) {
       const stage = leaving.length > 1 ? ranks.indexOf(exitRank(st)) : 0;
@@ -568,7 +570,7 @@
     for (const [id, buf] of results) {
       const st = stems.get(id);
       if (!buf) continue;
-      if (st.voice) { stopVoice(st.voice, when, st); setBuf(st, buf); st.voice = startVoice(st, when); swapped++; }
+      if (st.voice) { stopVoice(st.voice, when, st); setBuf(st, buf, (when - ctx.currentTime) * 1000); st.voice = startVoice(st, when); swapped++; } /* (its notes reach the phones when the new loop does) */
       else setBuf(st, buf);
     }
     if (retime) { $('#tempo').textContent = `${cfg.tempo} BPM · ${cfg.beatsPerBar}/4`; }
@@ -581,7 +583,13 @@
     btnState(bar, '✓ Applied', 'ok');
     return true;
   }
-  function setBuf(st, buf) { st.buffer = buf; st.layers = buf.layers || []; } /* a rendered stem with complexity carries its two extra layers on the buffer */
+  function setBuf(st, buf, delayMs = 0) { /* a rendered stem with complexity carries its two extra layers on the buffer, and its notes for the phones' piano roll */
+    st.buffer = buf; st.layers = buf.layers || []; st.roll = buf.roll || null;
+    if (st.roll && started) { if (delayMs > 50) setTimeout(() => sendRoll(st), delayMs); else sendRoll(st); }
+  }
+  /* The notes of a stem go to the phones through the server (it keeps the latest for phones that join later). [start beat, length in beats, pitch, layer] */
+  function sendRoll(st) { if (st.roll) send({ type: 'notes', stem: st.def.id, beats: st.roll.beats, notes: st.roll.notes }); }
+  function sendAllRolls() { for (const st of stems.values()) sendRoll(st); }
   function setBuffers(results) { for (const [id, buf] of results) if (buf) setBuf(stems.get(id), buf); }
 
   // ---------------- Clock loop: UI + reporting ----------------
@@ -596,7 +604,7 @@
       const bpb = cfg.beatsPerBar;
       const bar = Math.floor(beatIdx / bpb) % 8 + 1, beat = (beatIdx % bpb) + 1;
       $('#pos').textContent = `${bar}.${beat}`;
-      send({ type: 'tick', bar, beat, bpb });
+      send({ type: 'tick', bar, beat, bpb, n: beatIdx, bpm: cfg.tempo }); /* n = beats since the loop start: the phones' piano roll runs on it */
       updateRunInfo();
     }
     const playing = [];

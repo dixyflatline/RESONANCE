@@ -86,6 +86,11 @@
   .xy-fader b{color:#e6e9f2;font-weight:600;font-size:12px;letter-spacing:0;text-transform:none;font-variant-numeric:tabular-nums;white-space:nowrap}
   .xy-read{display:flex;justify-content:space-between;gap:8px;color:#8a93ad;font-variant-numeric:tabular-nums;flex-wrap:wrap}
   .xy-read b{color:#e6e9f2;font-weight:600}
+  .xy-roll{position:relative;flex:none;height:clamp(70px,12vh,104px);border-radius:12px;overflow:hidden;background:color-mix(in srgb, var(--c) 7%, #0b0e1a);border:1px solid color-mix(in srgb, var(--c) 35%, transparent)}
+  .xy-roll[hidden]{display:none}
+  .xy-roll canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+  .xy-overlay.compact .xy-sheet.hasroll .xy-pad{aspect-ratio:1/1}
+  .xy-sheet.nopad .xy-roll{display:none}
   .xy-mini{position:absolute;right:10px;bottom:10px;width:34px;height:34px;border-radius:8px;border:1px solid rgba(255,255,255,.35);background:rgba(0,0,0,.25);cursor:pointer;padding:0}
   .xy-mini i{position:absolute;width:8px;height:8px;margin:-4px 0 0 -4px;border-radius:50%;background:#fff}
   `;
@@ -167,13 +172,14 @@
   }
 
   // One shared modal sheet. open(stem, xy, isOn) shows the pad and fader for that stem; stem.complexity says whether X does anything.
-  // opts: { send(msg), onToggle(id), onLocal(id, {x, y, v}), closeLabel (e.g. '×'; default 'Done') }
+  // opts: { send(msg), onToggle(id), onLocal(id, {x, y, v}), closeLabel (e.g. '×'; default 'Done'), rollView(id) (phones: the view for the piano roll, see roll.js; null = no notes for this layer) }
   function createSheet(opts) {
     const ov = document.createElement('div'); ov.className = 'xy-overlay'; ov.hidden = true;
     ov.innerHTML = `<div class="xy-sheet">
       <div class="xy-head"><div class="xy-title"><span class="n"></span><small class="r"></small></div>
         <div><button class="xy-btn help" hidden aria-label="How this works">?</button><button class="xy-btn tog"></button><button class="xy-switch" role="switch" aria-checked="false" aria-label="Play this layer" hidden><span class="lbl">OFF</span><i></i></button><button class="xy-btn vote" hidden>Vote</button><button class="xy-btn close"></button></div></div>
       <div class="xy-note" hidden></div>
+      <div class="xy-roll" hidden aria-hidden="true"><canvas></canvas></div>
       <div class="xy-body"><div class="xy-wrap"><div class="xy-area"></div><div class="xy-help"></div></div><div class="xy-fad"></div></div>
       <div class="xy-read"><span class="rx">Complexity <b class="cx"></b></span><span>Cutoff <b class="cut"></b></span><span>Volume <b class="vol"></b></span></div>
     </div>`;
@@ -207,6 +213,17 @@
     const showHelp = (on) => { help.classList.toggle('show', !!on); if (on) { { const hb = help.querySelector('.hbody'); if (hb) hb.scrollTop = 0; } markSeen(); } };
     help.addEventListener('click', (e) => { if (e.target.closest('.hx, .gotit')) showHelp(false); });
     qBtn.onclick = () => showHelp(true);
+    /* The piano roll: redrawn every frame while the sheet is open. It stays hidden for layers without notes (or until the engine has sent them). */
+    const roll = ov.querySelector('.xy-roll'), rollCv = roll.querySelector('canvas'), sheetEl = ov.querySelector('.xy-sheet');
+    let rollRaf = 0;
+    const rollFrame = () => {
+      rollRaf = 0;
+      if (ov.hidden || stemId == null || !opts.rollView || !window.ResonanceRoll) return;
+      const v = opts.rollView(stemId);
+      if (!v) { if (!roll.hidden) { roll.hidden = true; sheetEl.classList.remove('hasroll'); } } else { if (roll.hidden) { roll.hidden = false; sheetEl.classList.add('hasroll'); } ResonanceRoll.draw(rollCv, v); }
+      rollRaf = requestAnimationFrame(rollFrame);
+    };
+    const startRoll = () => { roll.hidden = true; sheetEl.classList.remove('hasroll'); if (opts.rollView && !rollRaf) rollRaf = requestAnimationFrame(rollFrame); };
     const apply = (xy) => { Object.assign(s, XY_DEFAULT, xy); pad.set(s.x, s.y); fader.set(s.v); read(); };
     return {
       open(stem, xy, isOn, info) { /* info (phones only): { sound, slide, join, vol, noPad, noFader, vote } plain-language text for the explanation card */
@@ -228,6 +245,7 @@
         } else help.innerHTML = '';
         ov.hidden = false; // visible before the pad measures itself
         pad.setLocked(!hasX); apply(xy); this.setOn(isOn);
+        startRoll();
         showHelp(!!info && (noPad || !seen())); // first time: the card is on top of the pad; the vote layers (gong, nature samples) have no pad: their card is always shown
       },
       close() { showHelpOff(); ov.hidden = true; stemId = null; },
