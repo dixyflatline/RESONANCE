@@ -21,17 +21,20 @@
   #fxpanel { background:#0e1224; border-right:1px solid var(--line); padding:18px; overflow:auto; display:flex; flex-direction:column; gap:14px; }
   #fxpanel .fxlive { display:flex; flex-direction:column; gap:14px; }
   #fxpanel:not(.live) .fxlive { opacity:.4; pointer-events:none; }
-  #microOn { padding:5px 16px; font-weight:650; } #microOn[aria-pressed=true] { border-color:var(--accent); background:#27406e; color:#fff; box-shadow:0 0 12px rgba(127,179,255,.35); }
+  .slotOn { padding:5px 16px; font-weight:650; } .slotOn[aria-pressed=true] { border-color:var(--accent); background:#27406e; color:#fff; box-shadow:0 0 12px rgba(127,179,255,.35); }
   .fxsrc { border:1px solid var(--line); border-radius:12px; padding:10px 12px; display:flex; flex-direction:column; gap:8px; background:#0b0e1c; }
   .fxchips { display:flex; flex-wrap:wrap; gap:6px; min-height:28px; } .fxchip { display:inline-flex; align-items:center; gap:6px; padding:3px 4px 3px 9px; border-radius:99px; border:1px solid var(--c,#7fb3ff); background:color-mix(in srgb, var(--c,#7fb3ff) 16%, transparent); font-size:13px; font-weight:600; } .fxchip i { width:9px; height:9px; border-radius:50%; background:var(--c,#7fb3ff); flex:none; } .fxchip.all { --c:#8a93ad; padding-right:10px; font-weight:500; }
   .fxchip button { padding:0 7px; border:0; background:transparent; color:var(--text); font-size:15px; line-height:1.2; border-radius:99px; } .fxchip button:hover { background:rgba(255,255,255,.14); }
+  .fxtabs { display:grid; grid-template-columns:1fr 1fr; gap:6px; } .fxtab { display:flex; align-items:center; gap:6px; padding:7px 9px; font-size:13px; text-align:left; } .fxtab i { width:8px; height:8px; border-radius:50%; background:#3a4260; flex:none; } .fxtab.on i { background:var(--accent); box-shadow:0 0 8px var(--accent); }
+  .fxtab[aria-selected=true] { border-color:var(--accent); background:#18284a; } .fxslot { display:flex; flex-direction:column; gap:14px; margin-top:14px; } .fxslot[hidden] { display:none; } .fxslot > .row { align-items:flex-start; } .fxslotname { font-weight:650; font-size:15px; }
+  .fxbtns { display:flex; gap:3px; align-self:center; flex:none; }
   .fxhint { color:var(--muted); font-size:12px; } .fxchk { display:flex; gap:8px; align-items:center; font-size:13px; } .fxchk input { flex:none; }
   .fxpresets { display:grid; grid-template-columns:1fr 1fr; gap:6px; }
   .fxpreset { display:flex; flex-direction:column; align-items:flex-start; gap:1px; padding:8px 10px; text-align:left; } .fxpreset b { font-size:14px; } .fxpreset small { color:var(--muted); font-size:11px; letter-spacing:.04em; }
   .fxpreset[aria-pressed=true] { border-color:var(--accent); background:#18284a; box-shadow:0 0 0 1px var(--accent) inset; }
   .fxblurb { color:var(--muted); font-size:12px; min-height:3.6em; }
   .fxknobs { display:flex; flex-direction:column; gap:10px; } .fxknobs label > .label { display:flex; justify-content:space-between; }
-  .fxbtn { align-self:center; flex:none; padding:4px 8px; font-size:11px; font-weight:650; letter-spacing:.06em; border-radius:8px; } .fxbtn.on { background:var(--c); border-color:var(--c); color:#0a0c14; box-shadow:0 0 10px var(--c); }
+  .fxbtn { flex:none; padding:4px 7px; font-size:11px; font-weight:650; letter-spacing:.06em; border-radius:8px; } .fxbtn.on { background:var(--c); border-color:var(--c); color:#0a0c14; box-shadow:0 0 10px var(--c); }
   select { background:#0d1020; color:var(--text); border:1px solid var(--line); border-radius:6px; padding:6px; }
   button { font:inherit; color:var(--text); background:#1b2136; border:1px solid var(--line); border-radius:8px; padding:8px 10px; cursor:pointer; }
   button:hover { border-color:#3a4566; }
@@ -207,27 +210,34 @@
   </div>
 </aside>
 <section id="fxpanel" aria-label="Microcosm effect">
-  <div class="row"><h1>MICROCOSM<small>granular effect · instruments in</small></h1><button id="microOn" type="button" aria-pressed="false" title="Effect on / off">Off</button></div>
+  <div class="row"><h1>MICROCOSM<small>granular effect · two boxes</small></h1></div>
   <div class="fxhint" id="fxIdle">Start the engine to use the effect.</div>
   <div class="fxlive">
-    <div class="fxsrc">
-      <span class="label">Sources (the instruments that go in)</span>
-      <div class="fxchips" id="fxChips"></div>
-      <div class="grid2"><select id="fxSource" aria-label="Add an instrument to the effect"></select><button id="fxClear" type="button" title="Remove all instruments: the effect then listens to the whole mix">Clear</button></div>
-      <label class="fxchk" title="Silences the chosen instruments' normal sound so you hear only what comes out of the effect. Applies while the effect is on."><input type="checkbox" id="fxMuteDry"><span>Mute the dry sources (effect only)</span></label>
-      <div class="fxhint">Click <b>FX</b> beside any instruments in the sidebar to send them in. None chosen = the whole mix.</div>
-    </div>
-    <div class="label">Effect</div>
-    <div class="fxpresets" id="fxPresets"></div>
-    <div id="microBlurb" class="fxblurb"></div>
-    <div class="fxknobs">
-      <label><span class="label">Activity <span id="mv_activity"></span></span><input id="mk_activity" type="range" min="0" max="1" step="0.01"></label>
-      <label><span class="label">Size <span id="mv_size"></span></span><input id="mk_size" type="range" min="0" max="1" step="0.01"></label>
-      <label><span class="label">Repeats <span id="mv_repeats"></span></span><input id="mk_repeats" type="range" min="0" max="1" step="0.01"></label>
-      <label><span class="label">Tone <span id="mv_tone"></span></span><input id="mk_tone" type="range" min="0" max="1" step="0.01"></label>
-      <label><span class="label">Mix <span id="mv_mix"></span></span><input id="mk_mix" type="range" min="0" max="1" step="0.01"></label>
-    </div>
+    <div class="fxtabs" id="fxTabs" role="tablist"></div>
+    <div id="fxSlots"></div>
   </div>
+  <template id="fxSlotTpl">
+    <div class="fxslot">
+      <div class="row"><div><div class="fxslotname"></div><div class="fxhint fxslothint"></div></div><button class="slotOn" type="button" aria-pressed="false" title="This effect box on / off">Off</button></div>
+      <div class="fxsrc">
+        <span class="label">Sources (the instruments that go in)</span>
+        <div class="fxchips fxChips"></div>
+        <div class="grid2"><select class="fxSource" aria-label="Add an instrument to this effect box"></select><button class="fxClear" type="button" title="Remove all instruments: this box then listens to the whole mix">Clear</button></div>
+        <label class="fxchk" title="Silences the chosen instruments' normal sound so you hear only what comes out of this box. Applies while the box is on."><input type="checkbox" class="fxMuteDry"><span>Mute the dry sources (effect only)</span></label>
+        <div class="fxhint">Click <b>A</b> or <b>B</b> beside an instrument in the sidebar to send it here or to the other box. None chosen = the whole mix.</div>
+      </div>
+      <div class="label">Effect</div>
+      <div class="fxpresets"></div>
+      <div class="fxblurb"></div>
+      <div class="fxknobs">
+        <label><span class="label">Activity <span class="mv_activity"></span></span><input class="mk_activity" type="range" min="0" max="1" step="0.01"></label>
+        <label><span class="label">Size <span class="mv_size"></span></span><input class="mk_size" type="range" min="0" max="1" step="0.01"></label>
+        <label><span class="label">Repeats <span class="mv_repeats"></span></span><input class="mk_repeats" type="range" min="0" max="1" step="0.01"></label>
+        <label><span class="label">Tone <span class="mv_tone"></span></span><input class="mk_tone" type="range" min="0" max="1" step="0.01"></label>
+        <label><span class="label">Mix <span class="mv_mix"></span></span><input class="mk_mix" type="range" min="0" max="1" step="0.01"></label>
+      </div>
+    </div>
+  </template>
 </section>
 <main>
   <canvas id="viz"></canvas>

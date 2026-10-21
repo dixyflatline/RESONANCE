@@ -208,9 +208,17 @@ registerProcessor('micro-grain', MicroGrain);
     return buf;
   }
 
+  const loaded = new WeakMap();
+  /* Which kind of sound each preset suits: 'rhythm' = plucked, arpeggiated and percussive parts (they need a clear attack to chop and repeat); 'sustain' = held notes, pads and long melodies (they melt well into clouds and bends). */
+  const GROUPS = { rhythm: ['mosaic', 'glitch', 'strum', 'blocks', 'pattern'], sustain: ['haze', 'tunnel', 'warp'] };
+  for (const g of Object.keys(GROUPS)) for (const id of GROUPS[g]) PRESETS[id].group = g;
+
   async function create(ctx) {
-    const url = URL.createObjectURL(new Blob([WORKLET], { type: 'text/javascript' }));
-    try { await ctx.audioWorklet.addModule(url); } finally { URL.revokeObjectURL(url); }
+    if (!loaded.has(ctx)) { /* the worklet is registered once per audio context, however many effect boxes are made */
+      const url = URL.createObjectURL(new Blob([WORKLET], { type: 'text/javascript' }));
+      loaded.set(ctx, ctx.audioWorklet.addModule(url).finally(() => URL.revokeObjectURL(url)));
+    }
+    await loaded.get(ctx);
     const input = ctx.createGain(), output = ctx.createGain();
     const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 130;
     const node = new AudioWorkletNode(ctx, 'micro-grain', { numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [2] });
@@ -247,5 +255,5 @@ registerProcessor('micro-grain', MicroGrain);
     return api;
   }
 
-  window.ResonanceMicro = { create, PRESETS, ORDER };
+  window.ResonanceMicro = { create, PRESETS, ORDER, GROUPS };
 })();
