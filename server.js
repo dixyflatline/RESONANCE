@@ -354,6 +354,14 @@ function handleInput(msg, source, sender) {
       if (k) { log(`${source} saved kit "${k.name}"`); activeKit = { id: k.id, name: k.name, micro: k.micro }; broadcast({ type: 'config', ...publicConfig() }); }
       return;
     }
+    case 'kitDelete': { // remove a saved kit file (engine / HTTP only); the sounds that are live stay as they are
+      if (source === 'client') return;
+      if (Kits.deleteKit(KITS_DIR, msg.id)) {
+        log(`${source} removed kit "${msg.id}"`);
+        if (activeKit && activeKit.id === msg.id) { activeKit = { id: null, name: activeKit.name, micro: null }; broadcast({ type: 'config', ...publicConfig() }); }
+      }
+      return;
+    }
     case 'toggle': {
       const id = Number(msg.stem);
       if (!validStem(id)) return;
