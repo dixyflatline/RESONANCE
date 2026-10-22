@@ -65,7 +65,8 @@
   #kitBody { overflow:auto; padding:14px 18px; display:flex; flex-direction:column; gap:14px; } #kitBody h3 { margin:0; font-size:13px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); font-weight:600; }
   .kitpick { display:grid; grid-template-columns:1fr 1fr; gap:10px; } .kitpick label { display:flex; flex-direction:column; gap:4px; } .kitpick select { width:100%; } .kitsets { color:var(--muted); font-size:12px; min-height:2.4em; }
   .kit { border:1px solid var(--line); border-radius:12px; padding:10px 12px; background:#0e1224; display:flex; justify-content:space-between; gap:12px; align-items:center; } .kit.active { border-color:var(--accent); box-shadow:0 0 0 1px var(--accent) inset; } .kit b { font-size:15px; } .kit small { display:block; color:var(--muted); font-size:12px; margin-top:2px; }
-  .kit button, #kitLoad, #kitSave { flex:none; background:#27406e; border-color:#3d5f9c; } .kitsave { display:flex; gap:8px; } .kitsave input { flex:1; min-width:0; }
+  .kitbtns { display:flex; gap:6px; flex:none; } .kit .kitrm { background:transparent; border-color:var(--line); color:var(--muted); } .kit .kitrm.armed { background:#5a2430; border-color:#a04558; color:#fff; }
+  .kit button:not(.kitrm), #kitLoad, #kitSave { flex:none; background:#27406e; border-color:#3d5f9c; } .kitsave { display:flex; gap:8px; } .kitsave input { flex:1; min-width:0; }
   #kitBtn { padding:5px 12px; font-size:12px; max-width:150px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; } #kitBtn.busy { border-color:var(--accent); box-shadow:0 0 10px rgba(127,179,255,.35); }
   #packList { overflow:auto; padding:14px 18px; display:flex; flex-direction:column; gap:12px; }
   .sheet > footer { padding:10px 18px; border-top:1px solid var(--line); color:var(--muted); font-size:12px; display:flex; justify-content:space-between; align-items:center; gap:10px; }

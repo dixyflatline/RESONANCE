@@ -1115,7 +1115,7 @@
     $('#kitBody').innerHTML = `
       <section><h3>Saved kits</h3>${d.kits.length ? d.kits.map((k) => `<div class="kit${cur.kit === k.id ? ' active' : ''}">
         <div><b>${esc(k.name)}</b><small>${esc(k.description || '')}${k.description ? '<br>' : ''}Melodic: ${esc(kitNameOf(k.melodic, 'melodic'))} · Rhythmic: ${esc(kitNameOf(k.rhythmic, 'rhythmic'))}${k.micro ? ' · with Microcosm settings' : ''}</small></div>
-        <button data-kit="${esc(k.id)}">${cur.kit === k.id ? 'Reload' : 'Load'}</button></div>`).join('') : '<p class="muted">No kits yet. Pick sounds below, load them, and save them as a kit.</p>'}</section>
+        <div class="kitbtns"><button data-kit="${esc(k.id)}">${cur.kit === k.id ? 'Reload' : 'Load'}</button><button class="kitrm" data-rm="${esc(k.id)}" title="Delete this kit file">Remove</button></div></div>`).join('') : '<p class="muted">No kits yet. Pick sounds below, load them, and save them as a kit.</p>'}</section>
       <section><h3>Pick sounds</h3>
         <div class="kitpick">
           <label><span class="label">Melodic</span><select id="kitMel">${opts('melodic')}</select><span class="kitsets" id="kitMelSets"></span></label>
@@ -1129,6 +1129,10 @@
       </section>`;
     const upd = () => { $('#kitMelSets').innerHTML = setsLine('melodic', $('#kitMel').value); $('#kitRhySets').innerHTML = setsLine('rhythmic', $('#kitRhy').value); };
     $('#kitMel').addEventListener('change', upd); $('#kitRhy').addEventListener('change', upd); upd();
+    $('#kitBody').querySelectorAll('[data-rm]').forEach((b) => b.addEventListener('click', () => { /* two clicks: the second one removes */
+      if (!b.classList.contains('armed')) { b.classList.add('armed'); b.textContent = 'Really remove?'; setTimeout(() => { b.classList.remove('armed'); b.textContent = 'Remove'; }, 3500); return; }
+      send({ type: 'kitDelete', id: b.dataset.rm }); toast('kit', 'ok', 'Kit removed.'); setTimeout(loadKits, 500);
+    }));
     $('#kitBody').querySelectorAll('[data-kit]').forEach((b) => b.addEventListener('click', () => { send({ type: 'kit', id: b.dataset.kit }); toast('kit', 'work', 'Kit requested: the Melodic and Rhythmic sounds are fading out…'); closeKits(); }));
     $('#kitLoad').addEventListener('click', () => { send({ type: 'kit', melodic: $('#kitMel').value || null, rhythmic: $('#kitRhy').value || null, name: 'Custom sounds' }); toast('kit', 'work', 'Kit requested: the Melodic and Rhythmic sounds are fading out…'); closeKits(); });
     $('#kitSave').addEventListener('click', async () => {
