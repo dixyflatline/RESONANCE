@@ -47,7 +47,7 @@ There are **two boxes**. Box A (arps, plucks and percussion) holds the presets t
 
 **Live input.** The first row of the instrument list is Live input. Click it to start the Mac's microphone, 3.5 mm input or an audio interface. Its A and B buttons work like any instrument's; the gear opens the device list, the level and meter, *Hear the dry input too* (off by default, so only the effect is heard) and *Clean up* (echo cancellation and noise reduction, off by default because it dulls instruments). Use headphones with the built-in microphone, and open the engine page as `http://localhost:…` so the browser allows the microphone.
 
-Settings are remembered per browser. A kit can carry effect settings too (see Kits).
+Both boxes start On; with no source chosen they do nothing. Settings are remembered per browser. A kit can carry effect settings too (see Kits).
 
 ## Kits: changing sounds during a show
 

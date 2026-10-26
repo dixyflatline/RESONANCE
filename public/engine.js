@@ -284,7 +284,7 @@
     for (const k of KN) if (typeof sv.knobs?.[k] === 'number') x.micro.set(k, sv.knobs[k]);
     x.names = [].concat(sv.src || []).filter((n) => typeof n === 'string'); /* (older saves kept a single name) */
     x.muteDry = !!sv.muteDry; x.ui.q('.fxMuteDry').checked = x.muteDry;
-    x.micro.setTempo(cfg.tempo); x.ui.power(!!sv.on); x.ui.show();
+    x.micro.setTempo(cfg.tempo); x.ui.power(sv.on !== false); x.ui.show();
   }
   function applyKitMicro(m) { /* a kit's effect settings: boxes it does not mention are left as they are */
     for (const x of slotList()) if (m[x.def.key] && x.ui) applySlotSaved(x, m[x.def.key]);

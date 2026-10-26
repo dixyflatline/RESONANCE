@@ -79,7 +79,7 @@ Each phone shows one button per layer the audience may use. The core synth layer
 
 ## 6. The Microcosm effect box
 
-Two granular effect boxes in their own column between the stem list and the visuals on the engine page, in the spirit of the Microcosm pedal. It takes **one or more instruments** (and the live input) and plays pieces of it back as swarms of tiny grains with feedback, tone and reverb. It is **off** at start, needs the engine to be started, and the audience cannot touch it. Your settings are remembered in the browser.
+Two granular effect boxes in their own column between the stem list and the visuals on the engine page, in the spirit of the Microcosm pedal. It takes **one or more instruments** (and the live input) and plays pieces of it back as swarms of tiny grains with feedback, tone and reverb. Both boxes are **on** at start (with nothing chosen they do nothing), and the effect needs the engine to be started, and the audience cannot touch it. Your settings are remembered in the browser.
 
 There are **two effect boxes**, chosen with the tabs at the top of the column. Each has its own on/off, sources, preset and knobs, and both can run at once.
 
