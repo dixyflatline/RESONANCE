@@ -342,7 +342,7 @@
   // the gear opens device, level and monitoring. Audio: input -> level -> sends into box A / B (+ optional dry into the compressor).
   const live = { on: false, starting: false, stream: null, src: null, trim: null, an: null, sends: {}, dry: null, buf: null };
   const LS = 'resonance.livein';
-  const L = Object.assign({ dev: '', gain: 1, a: true, b: false, dry: false, clean: false, open: false }, (() => { try { return JSON.parse(localStorage.getItem(LS) || '{}') || {}; } catch { return {}; } })());
+  const L = Object.assign({ dev: '', ch: 'auto', gain: 1, a: true, b: false, dry: false, clean: false, open: false }, (() => { try { return JSON.parse(localStorage.getItem(LS) || '{}') || {}; } catch { return {}; } })());
   const keepLive = () => { try { localStorage.setItem(LS, JSON.stringify(L)); } catch { /* storage unavailable */ } };
   let liveMsg = '', liveErr = false, liveDevs = [];
   function liveNote(t, err) { liveMsg = t; liveErr = !!err; const n = $('#liveNote'); if (n) { n.textContent = t; n.classList.toggle('err', !!err); } }
@@ -372,8 +372,8 @@
   }
   function liveStop() {
     if (live.stream) live.stream.getTracks().forEach((t) => t.stop());
-    for (const n of [live.src, live.trim, live.an, live.dry, ...Object.values(live.sends)]) { try { n && n.disconnect(); } catch { /* gone */ } }
-    Object.assign(live, { on: false, starting: false, stream: null, src: null, trim: null, an: null, sends: {}, dry: null });
+    for (const n of [live.src, live.split, live.trim, live.an, live.dry, ...Object.values(live.sends)]) { try { n && n.disconnect(); } catch { /* gone */ } }
+    Object.assign(live, { on: false, starting: false, stream: null, src: null, split: null, trim: null, an: null, sends: {}, dry: null });
     const m = $('#liveMeter'); if (m) m.style.width = '0';
     liveRoute();
   }
@@ -388,11 +388,17 @@
       liveNote(e && e.name === 'NotAllowedError' ? 'The browser blocked the microphone. Allow it for this site (the icon in the address bar), then try again.' : 'Could not open that input: ' + (e && e.message || e), true);
       return;
     }
-    live.src = ctx.createMediaStreamSource(live.stream); live.trim = ctx.createGain();
+    /* always stereo downstream: every node after the source is forced to 2 channels, so a mono input is copied to left AND right.
+       A stereo input is used as it is ('auto'), or one side is picked and copied to both ('left' / 'right', for an interface with a single input plugged in). */
+    const stereo = (n) => { n.channelCount = 2; n.channelCountMode = 'explicit'; n.channelInterpretation = 'speakers'; return n; };
+    live.src = ctx.createMediaStreamSource(live.stream); live.trim = stereo(ctx.createGain());
+    const chans = (live.stream.getAudioTracks()[0].getSettings() || {}).channelCount || 1;
+    if ((L.ch === 'left' || L.ch === 'right') && chans > 1) { live.split = ctx.createChannelSplitter(2); live.src.connect(live.split); live.split.connect(live.trim, L.ch === 'left' ? 0 : 1, 0); }
+    else live.src.connect(live.trim);
     live.an = ctx.createAnalyser(); live.an.fftSize = 1024; live.buf = new Float32Array(1024);
-    live.src.connect(live.trim); live.trim.connect(live.an);
-    for (const k of ['a', 'b']) { const g = ctx.createGain(); g.gain.value = 0; live.trim.connect(g); if (slots[k]) g.connect(slots[k].micro.input); live.sends[k] = g; }
-    live.dry = ctx.createGain(); live.dry.gain.value = 0; live.trim.connect(live.dry); live.dry.connect(compNode);
+    live.trim.connect(live.an);
+    for (const k of ['a', 'b']) { const g = stereo(ctx.createGain()); g.gain.value = 0; live.trim.connect(g); if (slots[k]) g.connect(slots[k].micro.input); live.sends[k] = g; }
+    live.dry = stereo(ctx.createGain()); live.dry.gain.value = 0; live.trim.connect(live.dry); live.dry.connect(compNode);
     live.on = true; live.starting = false;
     liveRoute(); await listInputs(); /* (device names appear once the permission is given) */
   }
@@ -403,11 +409,13 @@
     wrap.innerHTML = `<div class="stemrow liverow" style="--c:#5fd39a"><button class="stem" id="liveOn" type="button" data-state="off" style="--c:#5fd39a" title="Start / stop the Mac's microphone, 3.5 mm input or audio interface"><span class="dot"></span><span class="name">Live input</span><span class="role" id="liveRole">mic · line in</span><span class="st"></span></button><span class="fxbtns"></span><button class="livegear" id="liveGear" type="button" aria-expanded="false" title="Input device, level and monitoring">⚙</button></div>
       <div id="liveDetail" hidden>
         <label><span class="label">Input device</span><select id="liveDev" aria-label="Audio input device"><option value="">Default input</option></select></label>
+        <label><span class="label">Channels</span><select id="liveCh" aria-label="Which input channel to use"><option value="auto">Stereo, or mono copied to both sides</option><option value="left">Left input only, copied to both sides</option><option value="right">Right input only, copied to both sides</option></select></label>
         <label><span class="label">Level <span id="liveGv"></span></span><input id="liveGain" type="range" min="0" max="2" step="0.01"></label>
         <div class="livemeter" aria-hidden="true"><i id="liveMeter"></i></div>
         <label class="fxchk" title="Also play the unprocessed input. Off = only what comes out of the effect."><input type="checkbox" id="liveDry"><span>Hear the dry input too</span></label>
         <label class="fxchk" title="Echo cancellation and noise suppression: helps when speakers are close to the microphone, but dulls instruments and line inputs."><input type="checkbox" id="liveClean"><span>Clean up (echo cancel, noise reduction)</span></label>
         <div class="fxhint" id="liveNote"></div>
+        <div class="fxhint">If the whole mix turns mono or dull when this starts, Bluetooth headphones have probably switched to headset mode: use wired or built-in output, or pick a different input device.</div>
       </div>`;
     while (wrap.lastChild) host.insertBefore(wrap.lastChild, host.firstChild);
     const fb = host.querySelector('.liverow .fxbtns');
@@ -418,10 +426,11 @@
     }
     $('#liveOn').addEventListener('click', () => { if (live.on || live.starting) liveStop(); else liveStart(); });
     $('#liveGear').addEventListener('click', () => openLive(!L.open));
-    $('#liveGain').value = L.gain; $('#liveDry').checked = L.dry; $('#liveClean').checked = L.clean;
+    $('#liveCh').value = L.ch; $('#liveGain').value = L.gain; $('#liveDry').checked = L.dry; $('#liveClean').checked = L.clean;
     $('#liveGain').addEventListener('input', (e) => { L.gain = Number(e.target.value); keepLive(); liveRoute(); });
     $('#liveDry').addEventListener('change', (e) => { L.dry = e.target.checked; keepLive(); liveRoute(); });
     $('#liveClean').addEventListener('change', (e) => { L.clean = e.target.checked; keepLive(); if (live.on) liveStart(); });
+    $('#liveCh').addEventListener('change', (e) => { L.ch = e.target.value; keepLive(); if (live.on) liveStart(); });
     $('#liveDev').addEventListener('change', (e) => { L.dev = e.target.value; keepLive(); if (live.on) liveStart(); else listInputs(); });
     openLive(L.open); liveNote(liveMsg || 'Use headphones with the built-in microphone, or the speakers will feed back into it.', liveErr);
     listInputs(); liveRoute();
