@@ -17,7 +17,7 @@
   let cfg = null;          // config from server
   let ctx = null;          // AudioContext
   let t0 = 0;              // master timeline origin
-  let master, brightness, analyserMaster;
+  let master, brightness, analyserMaster, compNode;
   const stems = new Map(); // id -> { def, buffer, bus, analyser, voice, stopUntil, level }
   let desired = new Set(); // server's desired active set
   let playsState = {};     // stem id -> { used, max }: how many times participants have started a limited stem (the gong) this performance
@@ -336,6 +336,76 @@
     setInterval(() => slotList().forEach((x) => x.micro.setTempo(cfg.tempo)), 500); /* the stepped presets follow the tempo, including its glide */
   }
 
+
+  // ---------------- Live input (microphone / 3.5 mm / interface) ----------------
+  // input -> level -> sends into effect box A and/or B (and optionally a dry monitor into the compressor).
+  const live = { on: false, stream: null, src: null, trim: null, an: null, sends: {}, dry: null, buf: null };
+  const LS = 'resonance.livein';
+  const liveSaved = (() => { try { return JSON.parse(localStorage.getItem(LS) || '{}') || {}; } catch { return {}; } })();
+  const keepLive = () => { try { localStorage.setItem(LS, JSON.stringify({ dev: $('#liveDev').value, gain: Number($('#liveGain').value), a: $('#liveA').checked, b: $('#liveB').checked, dry: $('#liveDry').checked, clean: $('#liveClean').checked })); } catch { /* storage unavailable */ } };
+  function liveNote(t, err) { const n = $('#liveNote'); n.textContent = t; n.classList.toggle('err', !!err); }
+  function liveRoute() {
+    if (!live.on) return;
+    const now = ctx.currentTime, want = { a: $('#liveA').checked, b: $('#liveB').checked };
+    for (const k of ['a', 'b']) live.sends[k].gain.setTargetAtTime(want[k] ? 1 : 0, now, 0.03);
+    live.dry.gain.setTargetAtTime($('#liveDry').checked ? 1 : 0, now, 0.03);
+    live.trim.gain.setTargetAtTime(Number($('#liveGain').value), now, 0.03);
+    $('#liveGv').textContent = Math.round(Number($('#liveGain').value) * 100) + '%';
+    const off = ['a', 'b'].filter((k) => want[k] && slots[k] && !slots[k].micro.enabled).map((k) => k.toUpperCase());
+    if (off.length) liveNote(`Box ${off.join(' and ')} is Off: turn it On to hear the input.`);
+    else if (!want.a && !want.b && !$('#liveDry').checked) liveNote('Nothing is selected to listen: pick a box, or hear the dry input.');
+    else liveNote('Use headphones with the built-in microphone, or the speakers will feed back into it.');
+  }
+  async function listInputs() {
+    try {
+      const devs = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === 'audioinput'), sel = $('#liveDev'), cur = sel.value || liveSaved.dev || '';
+      sel.innerHTML = ''; sel.add(new Option('Default input', ''));
+      devs.forEach((d, i) => { if (d.deviceId && d.deviceId !== 'default') sel.add(new Option(d.label || 'Input ' + (i + 1), d.deviceId)); });
+      sel.value = [...sel.options].some((o) => o.value === cur) ? cur : '';
+    } catch { /* no device list */ }
+  }
+  async function liveStop() {
+    if (live.stream) live.stream.getTracks().forEach((t) => t.stop());
+    for (const n of [live.src, live.trim, live.an, live.dry, ...Object.values(live.sends)]) { try { n && n.disconnect(); } catch { /* gone */ } }
+    Object.assign(live, { on: false, stream: null, src: null, trim: null, an: null, sends: {}, dry: null });
+    const b = $('#liveOn'); b.textContent = 'Off'; b.setAttribute('aria-pressed', 'false'); $('#liveMeter').style.width = '0';
+  }
+  async function liveStart() {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { liveNote('This page cannot use the microphone. Open it as http://localhost:… on this Mac (not the network address).', true); return; }
+    await liveStop();
+    const clean = $('#liveClean').checked, dev = $('#liveDev').value;
+    try {
+      live.stream = await navigator.mediaDevices.getUserMedia({ audio: { deviceId: dev ? { exact: dev } : undefined, echoCancellation: clean, noiseSuppression: clean, autoGainControl: false, channelCount: { ideal: 2 }, latency: 0 } });
+    } catch (e) {
+      liveNote(e && e.name === 'NotAllowedError' ? 'The browser blocked the microphone. Allow it for this site (the icon in the address bar), then try again.' : 'Could not open that input: ' + (e && e.message || e), true);
+      return;
+    }
+    live.src = ctx.createMediaStreamSource(live.stream); live.trim = ctx.createGain();
+    live.an = ctx.createAnalyser(); live.an.fftSize = 1024; live.buf = new Float32Array(1024);
+    live.src.connect(live.trim); live.trim.connect(live.an);
+    for (const k of ['a', 'b']) { const g = ctx.createGain(); g.gain.value = 0; live.trim.connect(g); if (slots[k]) g.connect(slots[k].micro.input); live.sends[k] = g; }
+    live.dry = ctx.createGain(); live.dry.gain.value = 0; live.trim.connect(live.dry); live.dry.connect(compNode);
+    live.on = true; const b = $('#liveOn'); b.textContent = 'On'; b.setAttribute('aria-pressed', 'true');
+    liveRoute(); await listInputs(); /* (device names appear once the permission is given) */
+  }
+  function initLiveUI() {
+    if (!slotList().length) { $('#liveIn').hidden = true; return; }
+    $('#liveGain').value = liveSaved.gain ?? 1; $('#liveA').checked = liveSaved.a ?? true; $('#liveB').checked = !!liveSaved.b; $('#liveDry').checked = !!liveSaved.dry; $('#liveClean').checked = !!liveSaved.clean;
+    $('#liveGv').textContent = Math.round(Number($('#liveGain').value) * 100) + '%';
+    listInputs();
+    $('#liveOn').addEventListener('click', () => { if (live.on) liveStop(); else liveStart(); });
+    for (const id of ['#liveA', '#liveB', '#liveDry', '#liveGain']) $(id).addEventListener('input', () => { liveRoute(); keepLive(); });
+    $('#liveDev').addEventListener('change', () => { keepLive(); if (live.on) liveStart(); });
+    $('#liveClean').addEventListener('change', () => { keepLive(); if (live.on) liveStart(); });
+    if (navigator.mediaDevices) navigator.mediaDevices.addEventListener?.('devicechange', listInputs);
+    setInterval(() => {
+      if (!live.on) return;
+      live.an.getFloatTimeDomainData(live.buf); let p = 0; for (let i = 0; i < live.buf.length; i++) p = Math.max(p, Math.abs(live.buf[i]));
+      $('#liveMeter').style.width = Math.min(100, Math.round(Math.sqrt(p) * 100)) + '%'; $('#liveMeter').style.background = p > 0.9 ? '#ef5a4a' : '#5fd39a';
+      liveRoute();
+    }, 150);
+  }
+
   // ---------------- Audio setup ----------------
   async function start() {
     ctx = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: 'interactive' });
@@ -343,7 +413,7 @@
     master = ctx.createGain(); master.gain.value = Number($('#vol').value);
     brightness = ctx.createBiquadFilter(); brightness.type = 'lowpass'; brightness.Q.value = 0.5;
     applyBrightness(Number($('#bright').value));
-    const comp = ctx.createDynamicsCompressor();
+    const comp = compNode = ctx.createDynamicsCompressor();
     comp.threshold.value = -14; comp.ratio.value = 3; comp.attack.value = 0.02; comp.release.value = 0.3;
     analyserMaster = ctx.createAnalyser(); analyserMaster.fftSize = 2048;
     master.connect(brightness).connect(comp).connect(analyserMaster).connect(ctx.destination);
@@ -357,6 +427,7 @@
 
     createStemNodes();
     if (slotList().length) initMicroUI();
+    initLiveUI();
     setBuffers(await loadAll());
     stale = false; t0 = ctx.currentTime + 0.1;
     started = true; showSong();
