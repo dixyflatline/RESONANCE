@@ -76,7 +76,7 @@ Generated sounds take time to render after a swap (about 37 seconds in the slowe
 3. Switch instruments on from the left panel, or let phones do it. Set tempo, key, chord source, fades and master volume in the same panel.
 4. Shape the sound with Microcosm: choose a preset in each box, send instruments (or the live input) to A and/or B with the buttons beside them, and turn the box On.
 5. Change the palette mid-show with **Kits…**: load a kit and the Melodic and Rhythmic groups fade, swap and return.
-6. **New variation** re-seeds melodies, bells, arp, bass and rhythm details. **Stop all** fades the layers out in order, colour first and drone last.
+6. **New variation** sits in each instrument's pad window and renders a new version of that instrument only. **Stop all** fades the layers out in order, colour first and drone last.
 
 Only one engine page plays: the page that pressed Start becomes the engine, and others stay in standby.
 

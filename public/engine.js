@@ -27,6 +27,7 @@
   const reportQuantize = () => send({ type: 'param', name: 'quantizeBar', value: quantize === 'bar' ? 1 : quantize === 'half' ? 0.5 : 1 / cfg.beatsPerBar });
   let ws = null, started = false, rendering = false;
   let key = 'D', seed = 1;
+  const varSeed = new Map(); // stem id -> its own seed after a per-instrument "New variation" (the global seed rules the rest)
   let lush = { voices: true, verb: true }; /* Lush voices / Lush reverb switches (see synth.js); saved per browser */
   try { const sv = JSON.parse(localStorage.getItem('resonance.lush') || 'null'); if (sv) lush = { voices: sv.voices !== false, verb: sv.verb !== false }; } catch {}
   let custom = null; /* a chord chart loaded from MusicXML (see the Chord chart picker): replaces the built-in progression in every generated stem */
@@ -510,7 +511,7 @@
       const was = new Map(prev.stems.map((d) => [d.id, JSON.stringify(d)]));
       const fresh = cfg.stems.filter((d) => was.get(d.id) !== JSON.stringify(d));
       const gone = prev.stems.filter((d) => !cfg.stems.some((x) => x.id === d.id) || fresh.some((x) => x.id === d.id));
-      for (const d of gone) { const st = stems.get(d.id); if (st) { if (st.voice) { stopVoice(st.voice, ctx.currentTime + LEAD, st); st.voice = null; } dropStemNodes(st); stems.delete(d.id); } delete xyState[d.id]; }
+      for (const d of gone) { varSeed.delete(d.id); const st = stems.get(d.id); if (st) { if (st.voice) { stopVoice(st.voice, ctx.currentTime + LEAD, st); st.voice = null; } dropStemNodes(st); stems.delete(d.id); } delete xyState[d.id]; }
       curRev = cfg.pack.rev ?? 0;
       toast('kit', 'work', `Loading ${cfg.pack.kit ? cfg.pack.kit.name : 'new sounds'}…`);
       for (const d of fresh) { if (xyState[d.id] === undefined) delete xyState[d.id]; makeStemNodes(d); }
@@ -600,7 +601,7 @@
           buf = await ResonanceSynth.renderStem({
             samples, pattern: def.synth === 'beats' ? { voices: def.voices, tiers: def.tiers, steps: def.steps } : undefined,
             synth: def.synth, id: def.id, sampleRate: ctx.sampleRate, tempo,
-            beatsPerBar: cfg.beatsPerBar, bars: def.bars || 8, key, mode: cfg.mode, progression: def.progression, style: def.style, seed, custom, lush, tiers: !!def.complexity,
+            beatsPerBar: cfg.beatsPerBar, bars: def.bars || 8, key, mode: cfg.mode, progression: def.progression, style: def.style, seed: varSeed.has(def.id) ? varSeed.get(def.id) : seed, custom, lush, tiers: !!def.complexity,
           });
         }
       } catch (e) { console.error(e); alertBanner(`Stem "${def.name}" failed to load: ${e.message}`); }
@@ -813,7 +814,7 @@
   }
 
   // Regenerate procedural stems (new key / seed) and swap them in on the next bar.
-  async function regenerate(newTempo = cfg.tempo, what = 'New variation', btn = null) {
+  async function regenerate(newTempo = cfg.tempo, what = 'New variation', btn = null, only = null) {
     if (!started) { if (/^Key/.test(what)) toast('regen', 'ok', `✓ ${what} will be used when the engine starts`); else toast('regen', 'err', `${what}: start the engine first`); return /^Key/.test(what); }
     if (rendering || switching) { toast('regen', 'err', `${what}: busy, wait for the current render to finish`); return false; }
     const bar = btn === false ? null : btn && btn.tagName !== 'SELECT' ? btn : (btn ? null : $('#regen')), orig = bar ? (bar.dataset.orig ?? bar.textContent) : '';
@@ -822,7 +823,8 @@
     toast('regen', 'work', `${what}: rendering stems…`);
     progressHook = (d, n) => { toast('regen', 'work', `${what}: rendering stems ${d}/${n}…`); btnState(bar, `Rendering ${d}/${n}`, 'work'); };
     let results;
-    try { results = await loadAll(newTempo); }
+    if (only && (stale || newTempo !== cfg.tempo)) only = null; /* a pending tempo change has to re-render everything */
+    try { results = await loadAll(newTempo, only ? [only] : undefined); }
     catch (err) { progressHook = null; toast('regen', 'err', `${what} failed: ${err.message}`); btnState(bar, orig, 'err'); $('#regen').disabled = false; $('#applyBpm').disabled = false; $('#key').disabled = false; return false; }
     progressHook = null;
     const retime = newTempo !== cfg.tempo || stale;
@@ -837,7 +839,7 @@
       else setBuf(st, buf);
     }
     if (retime) { $('#tempo').textContent = `${cfg.tempo} BPM · ${cfg.beatsPerBar}/4`; }
-    send({ type: 'reseed', seed, key });
+    if (!only) send({ type: 'reseed', seed, key });
     $('#regen').disabled = false; $('#applyBpm').disabled = false; $('#key').disabled = false; $('#applyBpm').hidden = true;
     updateRunInfo();
     const wait = Math.max(0, when - ctx.currentTime);
@@ -845,6 +847,12 @@
     toast('regen', 'ok', `✓ ${what} applied` + (swapped ? ` (${swapped} playing stem${swapped > 1 ? 's' : ''} swapped)` : ' (takes effect when stems start)'));
     btnState(bar, '✓ Applied', 'ok');
     return true;
+  }
+  async function varyStem(id, btn) { /* "New variation" on one instrument: only its stem is rendered again, with a seed of its own, and swapped in on the next bar */
+    const def = cfg.stems.find((d) => d.id === id); if (!def || def.file) return;
+    const had = varSeed.has(id), prev = varSeed.get(id);
+    varSeed.set(id, 1 + Math.floor(Math.random() * 999999));
+    if (!(await regenerate(cfg.tempo, `New variation: ${def.name}`, btn, def))) { if (had) varSeed.set(id, prev); else varSeed.delete(id); }
   }
   function setBuf(st, buf, delayMs = 0) { /* a rendered stem with complexity carries its two extra layers on the buffer, and its notes for the phones' piano roll */
     st.buffer = buf; st.layers = buf.layers || []; st.roll = buf.roll || null;
@@ -926,6 +934,7 @@
     fillFxSources();
     if (!sheet) sheet = ResonanceXY.createSheet({
       send,
+      onVariation: varyStem, canVary: (def) => !def.file,
       onToggle: (id) => send({ type: 'toggle', stem: id }),
       onLocal: (id, p) => { xyState[id] = { ...p }; applyXY(id); const m = document.querySelector(`.stemrow[data-id="${id}"] .xy-mini`); if (m) m.setXY(xyState[id]); },
     });
@@ -1285,7 +1294,7 @@
   $('#vol').addEventListener('input', (e) => master && master.gain.setTargetAtTime(Number(e.target.value), ctx.currentTime, 0.05));
   $('#bright').addEventListener('input', (e) => send({ type: 'param', name: 'brightness', value: Number(e.target.value) }));
   $('#stopAll').addEventListener('click', () => { const n = [...stems.values()].filter((s) => s.voice).length; send({ type: 'stopAll' }); if (n) { pendingStop = true; clearTimeout(stopTimer); stopTimer = setTimeout(() => { if (pendingStop) endStop('Stop finished'); }, 90000); toast('stop', 'work', `Stopping ${n} stem${n > 1 ? 's' : ''}, leaving in order, one group per bar…`); btnState($('#stopAll'), 'Stopping…', 'work'); } else toast('stop', 'ok', '✓ Nothing was playing'); });
-  $('#regen').addEventListener('click', async () => { const k = $('#key').value, s0 = seed; key = k; seed = Math.floor(Math.random() * 1e6); if (!(await regenerate(cfg.tempo, 'New variation', $('#regen')))) seed = s0; });
+  $('#regen').addEventListener('click', async () => { const k = $('#key').value, s0 = seed; key = k; varSeed.clear(); seed = Math.floor(Math.random() * 1e6); if (!(await regenerate(cfg.tempo, 'New variation', $('#regen')))) seed = s0; });
   $('#key').addEventListener('change', async () => { const prev = key; key = $('#key').value; if (!(await regenerate(cfg.tempo, `Key ${key}`, $('#key')))) { key = prev; $('#key').value = prev; } });
   $('#export').addEventListener('click', () => {
     let n = 0; toast('exp', 'work', 'Exporting WAV loops…'); btnState($('#export'), 'Exporting…', 'work');

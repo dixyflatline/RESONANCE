@@ -172,12 +172,12 @@
   }
 
   // One shared modal sheet. open(stem, xy, isOn) shows the pad and fader for that stem; stem.complexity says whether X does anything.
-  // opts: { send(msg), onToggle(id), onLocal(id, {x, y, v}), closeLabel (e.g. '×'; default 'Done'), rollView(id) (phones: the view for the piano roll, see roll.js; null = no notes for this layer) }
+  // opts: { onVariation(id, button) + canVary(stem) (engine only: a "New variation" button for this instrument alone), send(msg), onToggle(id), onLocal(id, {x, y, v}), closeLabel (e.g. '×'; default 'Done'), rollView(id) (phones: the view for the piano roll, see roll.js; null = no notes for this layer) }
   function createSheet(opts) {
     const ov = document.createElement('div'); ov.className = 'xy-overlay'; ov.hidden = true;
     ov.innerHTML = `<div class="xy-sheet">
       <div class="xy-head"><div class="xy-title"><span class="n"></span><small class="r"></small></div>
-        <div><button class="xy-btn help" hidden aria-label="How this works">?</button><button class="xy-btn tog"></button><button class="xy-switch" role="switch" aria-checked="false" aria-label="Play this layer" hidden><span class="lbl">OFF</span><i></i></button><button class="xy-btn vote" hidden>Vote</button><button class="xy-btn close"></button></div></div>
+        <div><button class="xy-btn help" hidden aria-label="How this works">?</button><button class="xy-btn var" hidden title="Render a new version of this instrument only">New variation</button><button class="xy-btn tog"></button><button class="xy-switch" role="switch" aria-checked="false" aria-label="Play this layer" hidden><span class="lbl">OFF</span><i></i></button><button class="xy-btn vote" hidden>Vote</button><button class="xy-btn close"></button></div></div>
       <div class="xy-note" hidden></div>
       <div class="xy-roll" hidden aria-hidden="true"><canvas></canvas></div>
       <div class="xy-body"><div class="xy-wrap"><div class="xy-area"></div><div class="xy-help"></div></div><div class="xy-fad"></div></div>
@@ -203,8 +203,9 @@
     const closeBtn = ov.querySelector('.close'); closeBtn.textContent = opts.closeLabel || 'Done'; if (opts.closeLabel) closeBtn.setAttribute('aria-label', 'Close'); /* the phone page uses a compact × */
     closeBtn.onclick = () => { showHelpOff(); ov.hidden = true; stemId = null; };
     ov.addEventListener('pointerdown', (e) => { if (e.target === ov) { showHelpOff(); ov.hidden = true; stemId = null; } });
-    const help = ov.querySelector('.xy-help'), tog = ov.querySelector('.tog'), sw = ov.querySelector('.xy-switch'), voteBtn = ov.querySelector('.vote'), note = ov.querySelector('.xy-note'), qBtn = ov.querySelector('.help');
+    const help = ov.querySelector('.xy-help'), varBtn = ov.querySelector('.var'), tog = ov.querySelector('.tog'), sw = ov.querySelector('.xy-switch'), voteBtn = ov.querySelector('.vote'), note = ov.querySelector('.xy-note'), qBtn = ov.querySelector('.help');
     let phone = false, isVote = false;
+    varBtn.onclick = () => { if (opts.onVariation && stemId != null) opts.onVariation(stemId, varBtn); };
     tog.onclick = sw.onclick = voteBtn.onclick = () => opts.onToggle(stemId);
     /* The explanation: shown on top of the pad the first time anyone opens a pad on this phone (add ?help=1 to the address to see it every time), and again from the ? button. */
     const SEEN = 'resonance.padHelp'; let memSeen = false;
@@ -236,7 +237,7 @@
         const noPad = !!(info && info.noPad);
         ov.querySelector('.xy-sheet').classList.toggle('nopad', noPad);
         ov.querySelector('.xy-sheet').classList.toggle('nofader', !!(info && info.noFader));
-        tog.hidden = phone; sw.hidden = !phone || isVote; voteBtn.hidden = !isVote; qBtn.hidden = !phone || noPad;
+        varBtn.hidden = phone || !opts.onVariation || !(opts.canVary ? opts.canVary(stem) : true); tog.hidden = phone; sw.hidden = !phone || isVote; voteBtn.hidden = !isVote; qBtn.hidden = !phone || noPad;
         if (info) {
           const esc = (t) => String(t).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
           const block = (h, t) => (t ? `<h4>${h}</h4><p>${esc(t)}</p>` : '');

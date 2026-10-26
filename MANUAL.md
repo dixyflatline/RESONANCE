@@ -41,7 +41,7 @@ Only one engine tab plays. The page that presses Start becomes the engine and an
 | Brightness | A master low-pass filter. Also a parameter a sensor can drive later. |
 | Master volume | Overall level. |
 | Export WAVs | Downloads the generated stems as WAV loops (a layer with complexity exports the full mix of its layers). |
-| New variation | New random seed: new melodies, bells, arp, bass and rhythm details. Swaps in on the next bar. |
+| New variation (in each instrument's pad) | Renders a new version of that one instrument with a new random seed. Swaps in on the next bar. Not offered for recorded files. |
 | Stop all | Fades the layers out in order, colour first, drone last. |
 
 **Restart run counter** (in the sidebar) restarts the progression-run count and gives the gong its three strikes again.

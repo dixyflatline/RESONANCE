@@ -42,7 +42,7 @@ npm start              # server on http://localhost:8080
 3. Open the **☰ menu** to show the QR code and join link for the audience.
 4. Shape the performance from the sidebar: BPM (while music is playing the tempo glides to the new value, 3 BPM per bar; with nothing playing it jumps straight to it without rendering anything; the stems are rendered once, at the new tempo, when the first stem is switched on), progression runs (Endless, or 1 to 64 runs, then an automatic fade-out), quantize, key, fades, brightness and master volume. Toggle stems yourself by clicking them; the engine page is not limited by audience rules.
 5. **Chord display for** switches the on-screen chords between concert pitch and **B♭ instruments** (trumpet, clarinet, tenor sax), which read two semitones higher: Dm9 · B♭maj7♯11 · Fmaj9 · C6/9 shows as Em9 · Cmaj7♯11 · Gmaj9 · D6/9. Only the display changes, never the audio, and the choice is remembered in the browser.
-5. **New variation** re-seeds the melodies, bells, arp, bass and rhythm details. **Stop all** fades the layers out in order, colour first and drone last.
+5. **New variation** is on each instrument's pad (click the small square beside the instrument): it renders a new version of that instrument only and swaps it in on the next bar. Recorded files have no such button. **Stop all** fades the layers out in order, colour first and drone last.
 
 **The audience (on their phones)**
 
