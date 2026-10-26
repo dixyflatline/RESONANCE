@@ -33,6 +33,8 @@ Stems sit in **groups** (for example Melodic and Rhythmic), and each group carri
 
 **Complexity layers.** A generated stem is rendered as three loops of the same length, from sparse to busy. The pad's X axis fades between them, so one pad moves from simple to rich. Recorded files ignore X.
 
+**Rhythm templates (Pulse and Sub).** Each of these two instruments has several rhythm templates, and the stem's seed picks one, so pressing New variation on its pad changes the groove. Pulse has Heartbeat (the original), Tresillo, Four on the floor, Half-time breath, Syncopated and Rolling toms. Sub has Long line (the original), Root and chord tone, Syncopated bass, Slow breath, Octave bounce and Chord walk. Sub may now play chord tones as well as D and A, but only low notes that stay clear of the drone's pitches and of the pad, atmos and arp notes of that chord. The chord progression itself always comes from the show seed, so a single instrument's variation never changes the harmony.
+
 **Pattern drums.** The `beats` synth plays one-shot samples from a written pattern. Each voice lists recordings from soft to hard, and each of three tiers gives a pattern per voice. In a pattern `X` is an accent, `x` a normal hit, `o` a ghost note, `p` a ghost played about half the time and `.` a rest; `|` separates bars. Every hit varies a little in velocity (which recording is used), timing (about 7 ms, accents stay on the grid) and tuning, so the loop never repeats exactly.
 
 The **world-percussion** pack uses it for four parts: Darbuka, Congas and Bongos, Frame drum and Deep drums. It holds 41 CC0 samples (about 4 MB) from VCSL, Karoryfer, Fugue State Audio and the Stargate pack, and replaces the Pulse and Sub pair.

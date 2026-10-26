@@ -601,7 +601,7 @@
           buf = await ResonanceSynth.renderStem({
             samples, pattern: def.synth === 'beats' ? { voices: def.voices, tiers: def.tiers, steps: def.steps } : undefined,
             synth: def.synth, id: def.id, sampleRate: ctx.sampleRate, tempo,
-            beatsPerBar: cfg.beatsPerBar, bars: def.bars || 8, key, mode: cfg.mode, progression: def.progression, style: def.style, seed: varSeed.has(def.id) ? varSeed.get(def.id) : seed, custom, lush, tiers: !!def.complexity,
+            beatsPerBar: cfg.beatsPerBar, bars: def.bars || 8, key, mode: cfg.mode, progression: def.progression, style: def.style, seed: varSeed.has(def.id) ? varSeed.get(def.id) : seed, planSeed: seed, custom, lush, tiers: !!def.complexity,
           });
         }
       } catch (e) { console.error(e); alertBanner(`Stem "${def.name}" failed to load: ${e.message}`); }
@@ -844,7 +844,7 @@
     updateRunInfo();
     const wait = Math.max(0, when - ctx.currentTime);
     if (swapped && wait > 0.3) { toast('regen', 'work', `${what}: ready, swapping in at the next bar (${wait.toFixed(1)} s)…`); btnState(bar, 'Waiting for bar…', 'work'); await sleep(wait * 1000 + 100); }
-    toast('regen', 'ok', `✓ ${what} applied` + (swapped ? ` (${swapped} playing stem${swapped > 1 ? 's' : ''} swapped)` : ' (takes effect when stems start)'));
+    const tn = only && results[0] && results[0][1] && results[0][1].roll && results[0][1].roll.name; toast('regen', 'ok', `✓ ${what}${tn ? ' (' + tn + ')' : ''} applied` + (swapped ? ` (${swapped} playing stem${swapped > 1 ? 's' : ''} swapped)` : ' (takes effect when stems start)'));
     btnState(bar, '✓ Applied', 'ok');
     return true;
   }

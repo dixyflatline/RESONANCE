@@ -263,6 +263,10 @@ Practise playing against a changing room without a room full of people. Open **h
 
 While the engine renders a layer that has complexity, `synth.js` records every note it builds (`rec()` in the leaf voices: pluck, bell, thump, noise hit, pad, glide and acid leads, sub notes) as `[start beat, length in beats, pitch, layer]` in beats, so a tempo change keeps them right. `renderStem` attaches them to the buffer as `roll`. The engine sends them to the server as `notes` messages (one per stem, again whenever it renders, and again after a reconnect or claim), and the server keeps the latest per stem for phones that join later and forwards them to phones only. The engine's `tick` message carries `n` (the beat count since the loop start) and `bpm`, which the phone runs a local clock on (nudged toward each tick). When a layer is switched on, the engine also sends `sched` with the beat where it will come in, so the phone can mark the entry line exactly. `public/roll.js` draws the strip; the pad sheet in `xy.js` hosts it when the page passes a `rollView(id)` function (the phone page does, the engine page does not).
 
+### Rhythm templates (Pulse and Sub)
+
+The seed of the Pulse and Sub stems picks a rhythm template, so **New variation** in their pad window changes the groove. Pulse: Heartbeat, Tresillo, Four on the floor, Half-time breath, Syncopated, Rolling toms. Sub: Long line, Root and chord tone, Syncopated bass, Slow breath, Octave bounce, Chord walk. Sub can play chord tones as well as D and A, kept clear of the drone's pitches and of the pad, atmos and arp notes. The harmony always follows the show seed (`planSeed`), so varying one instrument never changes the chords. The toast after a variation names the template.
+
 ## Kits
 
 A kit swaps the **Melodic** and **Rhythmic** sounds of the live pack while the show runs (`lib/kits.js`, files in `kits/`, panel: **Kits…** on the engine page).

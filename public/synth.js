@@ -526,6 +526,29 @@
     for (const j of [1, 2]) if (m.want(Math.max(j, lv))) play(D[j], TAIL_GAIN[j], 0.04);
   }
 
+
+  /* Rhythm templates for Pulse and Sub: the seed of the stem picks one, so "New variation" on either instrument changes the groove, not just the details. */
+  const pickW = (r, w) => { const tot = w.reduce((a, b) => a + b, 0); let x = r * tot; for (let i = 0; i < w.length; i++) { x -= w[i]; if (x < 0) return i; } return 0; };
+  /* Pulse: hits as [beat in the bar, voice, gain, layer]; voices R tonic thump, F fifth thump, t tuned tom, u high tom. sh = the shaker over 16 sixteenths (X accent, x normal, o ghost). Layer = the complexity layer the hit belongs to (0 sparse .. 2 busy). */
+  const PULSE_TPL = [
+    { name: 'Heartbeat', w: 3 }, /* the original: lub-dub on beats 1 and 3, tuned toms on the off-beats, written out in pulse() itself */
+    { name: 'Tresillo', w: 2, sh: 'x.o.x.o.x.o.X.o.', th: [[0, 'R', 0.55, 0], [1.5, 'F', 0.4, 0], [3, 'R', 0.42, 0], [0.75, 'F', 0.22, 1], [2.25, 't', 0.2, 1], [2.75, 't', 0.16, 2], [3.5, 'u', 0.14, 2], [1, 'u', 0.12, 2]] },
+    { name: 'Four on the floor', w: 2, sh: '..o...X...o...X.', th: [[0, 'R', 0.55, 0], [1, 'F', 0.3, 0], [2, 'R', 0.5, 0], [3, 'F', 0.3, 0], [2.5, 't', 0.2, 1], [0.5, 't', 0.15, 1], [1.75, 'u', 0.14, 2], [3.75, 'u', 0.14, 2]] },
+    { name: 'Half-time breath', w: 2, sh: 'x...o...x...o...', th: [[0, 'R', 0.6, 0], [2.75, 'F', 0.35, 0], [2, 'R', 0.25, 1], [3.5, 't', 0.22, 1], [1.5, 'u', 0.15, 2], [3.75, 'u', 0.14, 2]] },
+    { name: 'Syncopated', w: 2, sh: 'x.ox.o.xx.o.x.ox', th: [[0, 'R', 0.55, 0], [1.75, 'R', 0.4, 0], [2.5, 'F', 0.34, 0], [3.25, 't', 0.22, 1], [0.75, 't', 0.15, 1], [3, 'u', 0.14, 2], [3.75, 'u', 0.14, 2], [1, 'F', 0.2, 2]] },
+    { name: 'Rolling toms', w: 2, sh: 'o.x.o.x.o.x.o.x.', th: [[0, 'R', 0.55, 0], [2, 'R', 0.5, 0], [1, 't', 0.2, 1], [3, 't', 0.2, 1], [1.5, 'F', 0.2, 1], [0.5, 'u', 0.12, 2], [1.5, 'u', 0.12, 2], [2.5, 'u', 0.12, 2], [3.5, 'u', 0.12, 2]] },
+  ];
+  const PULSE_VOICE = { R: [0, -12, 0.45], F: [-5, -12, 0.35], t: [7, -5, 0.3], u: [10, 0, 0.22] }; /* [semitones from the key's tonic for the attack, for the end of the drop, decay] */
+  /* Sub: [beat in the bar, length in beats, kind]; a = an anchor (D or A, as the plan), c = a chord tone, o = the anchor an octave up, k = walk up through the chord's low tones. 'breath' works per chord (2 bars) instead of per bar. */
+  const SUB_TPL = [
+    { name: 'Long line', w: 3 }, /* the original: the plan's long blooming line */
+    { name: 'Root and chord tone', w: 2, bar: [[0, 2.5, 'a'], [2.5, 1.5, 'c']] },
+    { name: 'Syncopated bass', w: 2, bar: [[0, 1.5, 'a'], [1.5, 1.5, 'c'], [3, 1, 'a']] },
+    { name: 'Slow breath', w: 2, chord: [[0, 4.5, 'a'], [4.5, 3.5, 'c']] },
+    { name: 'Octave bounce', w: 1, bar: [[0, 1, 'a'], [1.5, 1, 'o'], [3, 1, 'a']] },
+    { name: 'Chord walk', w: 1, bar: [[0, 1.5, 'k'], [1.5, 1.5, 'k'], [3, 1, 'k']] },
+  ];
+
   function thump(ctx, dest, { t, gain = 0.6, f0 = 95, f1 = 42, decay = 0.45 }) {
     rec(ctx, t, decay * 0.5, f2p(f0));
     const o = ctx.createOscillator(); o.type = 'sine';
@@ -873,6 +896,31 @@
           }
         }
       };
+      const si = strict || m.bpb !== 4 ? 0 : pickW(m.mkRnd()(), SUB_TPL.map((x) => x.w)), stpl = SUB_TPL[si]; m.tplName = strict ? 'Strict' : stpl.name;
+      if (si > 0) { /* a rhythm template: the notes are the anchors (D / A) or chord tones in the Sub's own range that do not clash with the drone's pitches or the pad, atmos and arp notes of that chord */
+        const root = m.root, ladder = m.plan.ladder || [root - 12, root - 5, root, root + 7], drone = m.plan.drone || [root - 12, root - 5, root];
+        const pcOf = (n) => ((n % 12) + 12) % 12;
+        m.forChords((chord, t0, seg, ci) => {
+          const rr = mulberry32(hash(`${m.seed}:subtpl:${si}:${ci}`));
+          const pcs = chord.map(pcOf), soft = [...((m.plan.pad && m.plan.pad[ci]) || []), ...((m.plan.atmos && m.plan.atmos[ci]) || []), ...((m.plan.arp && m.plan.arp[ci]) || [])];
+          let anc = (m.plan.subNotes ? m.plan.subNotes(ci) : []).filter((n) => n < root + 8); if (!anc.length) anc = [root - 12];
+          const low = []; for (let n = root - 12; n <= root + 7; n++) if (pcs.includes(pcOf(n)) && !drone.some((h) => [1, 2].includes(Math.abs(n - h))) && !blocked(n, [], soft)) low.push(n);
+          const alt = low.filter((n) => !ladder.includes(n)), pool = [...new Set([...anc, ...low])].sort((x, y) => x - y);
+          const W = Math.round(seg / B); let kStep = 0;
+          const evs = [];
+          if (stpl.chord) evs.push(...stpl.chord.map(([b, d, k]) => [b, Math.min(d, W - b), k]));
+          else for (let bar = 0; bar < Math.floor(W / m.bpb); bar++) for (const [b, d, k] of stpl.bar) evs.push([bar * m.bpb + b, d, k]);
+          for (const [b, d, kind] of evs) {
+            const r1 = rr(), r2 = rr(), a0 = anc[Math.floor(r1 * anc.length)];
+            let n = a0;
+            if (kind === 'c') n = alt.length && r2 < 0.65 ? alt[Math.floor(r2 / 0.65 * alt.length)] : anc[(anc.indexOf(a0) + 1) % anc.length] ?? a0;
+            else if (kind === 'o') n = a0 + 12 <= root + 7 ? a0 + 12 : a0;
+            else if (kind === 'k') n = pool[(kStep++ + ci) % pool.length];
+            if (m.want(0)) note(t0 + b * B, d * B, n, { attack: Math.min(0.3, d * B * 0.3), release: 0.9 + r2 * 0.8 });
+          }
+        });
+        extras(); return;
+      }
       if (strict) { if (m.want(0)) for (let b = 0; b < nBars; b++) note(b * m.bar, m.bar, m.plan.sub[b % m.plan.sub.length], { attack: 0.35, release: 0.35 }); extras(); return; }
       for (let c = 0; c < Math.round(m.L / (B * m.plan.chordBeats)); c++) f.frequency.setValueAtTime(150 + m.rnd() * 110, c * B * m.plan.chordBeats);
       const cycle = (m.plan.cycleBeats ?? m.plan.chordBeats * 4) * B;
@@ -975,6 +1023,30 @@
       // layer 2 adds the sixteenth-note shaker, the pick-up before the bar line and a ghost thump.
       const bus = ctx.createGain(); bus.connect(out); bus.connect(verb.in(0.15));
       const beats = Math.round(m.L / m.beat);
+      const ti = m.bpb === 4 ? pickW(m.mkRnd()(), PULSE_TPL.map((x) => x.w)) : 0, tpl = PULSE_TPL[ti]; m.tplName = tpl.name;
+      if (ti > 0) { /* a rhythm template (4/4): the hits are the template's, the details (skipped shaker hits, pick-ups) are still drawn from the seed */
+        const bars = Math.round(beats / 4);
+        for (let bar = 0; bar < bars; bar++) {
+          for (const [pos, v, g, lv] of tpl.th) {
+            const skip = m.rnd() < (lv === 0 ? 0 : 0.1), jit = m.rnd();
+            if (skip || !m.want(lv)) continue;
+            const [a, z, dec] = PULSE_VOICE[v];
+            thump(ctx, bus, { t: (bar * 4 + pos) * m.beat, gain: g * (0.9 + jit * 0.2), f0: mtof(m.root + a), f1: mtof(m.root + z), decay: dec });
+          }
+          for (let s = 0; s < 16; s++) {
+            const ch = tpl.sh[s], acc = ch === 'X' ? 1 : ch === 'x' ? 0.5 : ch === 'o' ? 0.3 : 0;
+            const skip = m.rnd() < 0.12, g = m.rnd(), pn = m.rnd(), off = m.rnd();
+            if (!acc || skip || !m.want(s % 2 === 0 ? 1 : 2)) continue;
+            noiseHit(ctx, bus, m.noise, { t: (bar * 4 + s / 4) * m.beat, gain: 0.06 * acc * (0.7 + g * 0.6), decay: 0.07, hp: 7000, pan: (pn - 0.5) * 0.8, offset: off * 5 });
+          }
+          if (bar % 4 === 3) { /* the turnaround at the end of every four bars */
+            const pickup = m.rnd() < 0.6, off = m.rnd(), ghost = m.rnd() < 0.5;
+            if (pickup && m.want(2)) noiseHit(ctx, bus, m.noise, { t: (bar * 4 + 3.5) * m.beat, gain: 0.08, decay: 0.12, hp: 2500, offset: off * 5 });
+            if (ghost && m.want(2)) thump(ctx, bus, { t: (bar * 4 + 3.5) * m.beat, gain: 0.3, f0: mtof(m.root - 5), f1: mtof(m.root - 12), decay: 0.3 });
+          }
+        }
+        return;
+      }
       for (let b = 0; b < beats; b++) {
         const t = b * m.beat, inBar = b % m.bpb;
         if (inBar === 0 || inBar === Math.floor(m.bpb / 2)) {
@@ -1162,7 +1234,7 @@
     const m = {
       tier, want: (lv) => tier === null || tier === lv, /* events of complexity level lv are built only in the layer for lv */
       rndT: mulberry32(hash(`${seed}:${synth}:${id}:t${tier}`)), mkRnd: () => mulberry32(hash(`${seed}:${synth}:${id}`)), /* a stream of its own for this layer, and a fresh copy of the shared one */
-      lush, mode, prog, ambient, style, custom, plan: custom ? buildCustomPlan(KEY_ROOTS[key] ?? 50, seed, customFull, bpb) : buildPlan(KEY_ROOTS[key] ?? 50, seed, { bpb, mode: 'minor' }), scale: SCALES[mode], root: KEY_ROOTS[key] ?? 50, beat, bar, bpb, L, rnd, noise,
+      lush, mode, prog, ambient, style, custom, plan: custom ? buildCustomPlan(KEY_ROOTS[key] ?? 50, opts.planSeed ?? seed, customFull, bpb) : buildPlan(KEY_ROOTS[key] ?? 50, opts.planSeed ?? seed, { bpb, mode: 'minor' }), scale: SCALES[mode], root: KEY_ROOTS[key] ?? 50, beat, bar, bpb, L, rnd, noise,
       // The progression's chords spread over the loop in whole bars; extra bars go to the first chords (7 chords in 8 bars -> 2,1,1,1,1,1,1; the 4 ambient chords -> 2 bars each).
       forProg(fn) {
         if (custom) { custom.chords.forEach((c, i) => fn(prog[i], c.start * bar, c.len * bar, i, prog.length)); return; }
@@ -1172,7 +1244,7 @@
       },
       forChords(fn) { if (custom) { custom.chords.forEach((c, i) => fn(prog[i], c.start * bar, c.len * bar, i)); return; } const n = Math.max(1, Math.round(L / seg)); for (let i = 0; i < n; i++) fn(CHORDS[i % 4], i * seg, seg, i % 4); },
     };
-    m.seed = seed; m.samples = opts.samples || {}; m.pattern = opts.pattern || null; /* beats: the decoded one-shots and the pack's patterns */
+    m.seed = seed; m.id = id; m.samples = opts.samples || {}; m.pattern = opts.pattern || null; /* beats: the decoded one-shots and the pack's patterns */
     build(ctx, out, verb, m);
 
     const r = await ctx.startRendering();
@@ -1192,6 +1264,7 @@
       const k = 0.95 / peak;
       for (let ch = 0; ch < 2; ch++) { const d = loop.getChannelData(ch); for (let i = 0; i < N; i++) d[i] *= k; }
     }
+    loop.tplName = m.tplName;
     if (ctx.__ev) loop.noteEvents = ctx.__ev.filter((e) => e[0] >= 0 && e[0] < L - 1e-6).map(([t, d, p]) => [+(t / beat).toFixed(3), +Math.max(d / beat, 0.05).toFixed(3), p === null ? null : +p.toFixed(1)]); /* in beats, so they stay right when the tempo changes */
     return loop;
   }
@@ -1211,7 +1284,7 @@
     if (peak > 0.95) { const k = 0.95 / peak; for (const c of d) for (const a of c) for (let i = 0; i < n; i++) a[i] *= k; }
     bufs[0].layers = [bufs[1], bufs[2]];
     /* the piano roll: every note with the layer it belongs to, [start beat, length in beats, pitch, layer], and the loop length in beats */
-    bufs[0].roll = { beats: bufs[0].duration / (60 / opts.tempo), notes: bufs.flatMap((b, k) => (b.noteEvents || []).map((e) => [...e, k])).sort((a, b) => a[0] - b[0]) };
+    bufs[0].roll = { beats: bufs[0].duration / (60 / opts.tempo), notes: bufs.flatMap((b, k) => (b.noteEvents || []).map((e) => [...e, k])).sort((a, b) => a[0] - b[0]), name: bufs[0].tplName };
     return bufs[0];
   }
 
