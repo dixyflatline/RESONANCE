@@ -848,6 +848,15 @@
     btnState(bar, '✓ Applied', 'ok');
     return true;
   }
+  function rollViewFor(id) { /* the pad's piano roll, the same view the phones get: where the notes are now, and when a layer that was just switched on comes in */
+    const st = stems.get(id), r = st && st.roll; if (!r || !started || !ctx) return null;
+    const now = ctx.currentTime, bl = beatLen(), pos = (now - t0) / bl, on = desired.has(id), xy = xyState[id] || ResonanceXY.XY_DEFAULT;
+    const sounding = (st.voice && st.voice.start <= now) || st.stopUntil > now;
+    let mode = 'off', start = null, label = 'Off';
+    if (sounding) { mode = 'playing'; label = on ? 'Playing' : 'Fading out'; }
+    else if (on && st.voice && st.voice.start > now) { mode = 'waiting'; start = (st.voice.start - t0) / bl; const left = Math.max(0, start - pos); label = left < 1 ? 'Starting' : `Starts in ${Math.ceil(left)} beat${Math.ceil(left) > 1 ? 's' : ''}`; }
+    return { notes: r.notes, beats: r.beats, pos, bpb: cfg.beatsPerBar || 4, color: st.def.color || '#8fb8ff', mode, start, label, gains: st.def.complexity ? [1, ResonanceXY.layerGain(xy.x, 0), ResonanceXY.layerGain(xy.x, 1)] : [1, 0, 0] };
+  }
   async function varyStem(id, btn) { /* "New variation" on one instrument: only its stem is rendered again, with a seed of its own, and swapped in on the next bar */
     const def = cfg.stems.find((d) => d.id === id); if (!def || def.file) return;
     const had = varSeed.has(id), prev = varSeed.get(id);
@@ -934,6 +943,7 @@
     fillFxSources();
     if (!sheet) sheet = ResonanceXY.createSheet({
       send,
+      rollView: rollViewFor,
       onVariation: varyStem, canVary: (def) => !def.file,
       onToggle: (id) => send({ type: 'toggle', stem: id }),
       onLocal: (id, p) => { xyState[id] = { ...p }; applyXY(id); const m = document.querySelector(`.stemrow[data-id="${id}"] .xy-mini`); if (m) m.setXY(xyState[id]); },
