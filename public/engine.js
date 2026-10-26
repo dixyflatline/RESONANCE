@@ -411,6 +411,10 @@
       buildStemRows(); applyFx();
       const m = cfg.pack.kit && cfg.pack.kit.micro; if (m) applyKitMicro(m);
       toast('kit', 'ok', `✓ ${cfg.pack.kit ? cfg.pack.kit.name : 'Sounds'} is live`);
+    } catch (err) {
+      console.error('kit swap failed', err);
+      toast('kit', 'err', `Could not load ${cfg.pack.kit ? cfg.pack.kit.name : 'the sounds'}: ${err && err.message || err}. Reload this page (Cmd+Shift+R) and restart the server.`);
+      try { buildStemRows(); applyFx(); } catch (e) {}
     } finally { switching = false; }
     reconcile(); renderRows(); kitBar();
   }
