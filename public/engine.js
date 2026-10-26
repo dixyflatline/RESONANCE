@@ -367,7 +367,7 @@
       sel.innerHTML = ''; sel.add(new Option('Default input', ''));
       liveDevs.forEach((d, i) => sel.add(new Option(d.label || 'Input ' + (i + 1), d.deviceId)));
       sel.value = [...sel.options].some((o) => o.value === L.dev) ? L.dev : '';
-      const role = $('#liveRole'); if (role) role.textContent = sel.value ? sel.selectedOptions[0].text : 'microphone · 3.5 mm · interface';
+      const role = $('#liveRole'); if (role) role.textContent = sel.value ? sel.selectedOptions[0].text : 'mic · line in';
     } catch { /* no device list */ }
   }
   function liveStop() {
@@ -400,7 +400,7 @@
   function mountLiveRow() { /* (called each time the instrument list is rebuilt) */
     const host = $('#stems'); if (!host) return;
     const wrap = document.createElement('div');
-    wrap.innerHTML = `<div class="stemrow liverow" style="--c:#5fd39a"><button class="stem" id="liveOn" type="button" data-state="off" style="--c:#5fd39a" title="Start / stop the Mac's microphone, 3.5 mm input or audio interface"><span class="dot"></span><span class="name">Live input</span><span class="role" id="liveRole">microphone · 3.5 mm · interface</span><span class="st"></span></button><span class="fxbtns"></span><button class="livegear" id="liveGear" type="button" aria-expanded="false" title="Input device, level and monitoring">⚙</button></div>
+    wrap.innerHTML = `<div class="stemrow liverow" style="--c:#5fd39a"><button class="stem" id="liveOn" type="button" data-state="off" style="--c:#5fd39a" title="Start / stop the Mac's microphone, 3.5 mm input or audio interface"><span class="dot"></span><span class="name">Live input</span><span class="role" id="liveRole">mic · line in</span><span class="st"></span></button><span class="fxbtns"></span><button class="livegear" id="liveGear" type="button" aria-expanded="false" title="Input device, level and monitoring">⚙</button></div>
       <div id="liveDetail" hidden>
         <label><span class="label">Input device</span><select id="liveDev" aria-label="Audio input device"><option value="">Default input</option></select></label>
         <label><span class="label">Level <span id="liveGv"></span></span><input id="liveGain" type="range" min="0" max="2" step="0.01"></label>

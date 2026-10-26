@@ -79,7 +79,7 @@ Each phone shows one button per layer the audience may use. The core synth layer
 
 ## 6. The Microcosm effect box
 
-Two granular effect boxes in their own column between the stem list and the visuals on the engine page, in the spirit of the Microcosm pedal. It takes **one or more instruments** (or the whole mix) and plays pieces of it back as swarms of tiny grains with feedback, tone and reverb. It is **off** at start, needs the engine to be started, and the audience cannot touch it. Your settings are remembered in the browser.
+Two granular effect boxes in their own column between the stem list and the visuals on the engine page, in the spirit of the Microcosm pedal. It takes **one or more instruments** (and the live input) and plays pieces of it back as swarms of tiny grains with feedback, tone and reverb. It is **off** at start, needs the engine to be started, and the audience cannot touch it. Your settings are remembered in the browser.
 
 There are **two effect boxes**, chosen with the tabs at the top of the column. Each has its own on/off, sources, preset and knobs, and both can run at once.
 
@@ -88,7 +88,7 @@ There are **two effect boxes**, chosen with the tabs at the top of the column. E
 
 A percussive instrument can go into either box, and an instrument can go into both.
 
-1. Click **A** or **B** beside an instrument in the stem list to send it into that box. Click again to take it out. The chosen sources show as chips in the box (the × removes one), the **Add an instrument** menu does the same, and **Clear** returns the box to the whole mix. With none chosen a box hears the whole mix.
+1. Click **A** or **B** beside an instrument in the stem list to send it into that box. Click again to take it out. The chosen sources show as chips in the box (the × removes one), the **Add an instrument** menu does the same, and **Clear** empties the box. With none chosen a box has no input and does nothing (nothing is sent through it).
 2. Press **Off** beside the box name to turn it on (the tab shows a lit dot). The sources keep playing as they were and the effect is added on top. Tick **Mute the dry sources** to hear only the effect for the chosen instruments (it applies while that box is on).
 3. Pick a preset in the box. Choosing one resets the knobs to a good starting point for it.
 4. Shape it: **Activity** (how many grains, how fast), **Size** (grain and loop length), **Repeats** (feedback: how long the sound keeps circling), **Tone** (darker to brighter) and **Mix** (how loud the effect is).
