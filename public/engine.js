@@ -218,13 +218,13 @@
 
   // ---------------- Microcosm effect boxes ----------------
   // A panel between the stem list and the visuals with two effect boxes. A = presets for arps, plucks and percussion; B = presets for long tones, pads and melodies.
-  // Each box has its own sources (the A / B buttons in the stem list, or the Add menu; none chosen = the whole mix), preset and knobs. A percussive instrument can go into either box.
+  // Each box has its own sources (the A / B buttons in the stem list, or the Add menu; none chosen = no effect), preset and knobs. A percussive instrument can go into either box.
   // The effects are wet-only; a source keeps playing dry unless that box's "Mute the dry sources" is ticked.
   const SLOTS = [
     { key: 'a', tab: 'A', name: 'Arp & plucks', group: 'rhythm', first: 'mosaic', hint: 'For arps, plucks and percussion: presets that chop, repeat and strum.' },
     { key: 'b', tab: 'B', name: 'Long tones', group: 'sustain', first: 'haze', hint: 'For held notes, pads and melodies: presets that melt and bend.' },
   ];
-  const slots = {}; // key -> { def, micro, masterSend, set: Set of stem ids (empty = the whole mix), names (the same by name, to survive a pack switch), muteDry, el }
+  const slots = {}; // key -> { def, micro, masterSend, set: Set of stem ids (empty = nothing goes in: the box passes nothing), names (the same by name, to survive a pack switch), muteDry, el }
   const slotList = () => SLOTS.map((d) => slots[d.key]).filter(Boolean);
   let fxTab = 'a';
   const KN = ['activity', 'size', 'repeats', 'tone', 'mix'];
@@ -246,9 +246,9 @@
       }
       if (st.dry) st.dry.gain.setTargetAtTime(mute ? 0 : 1, now, 0.03);
     }
-    for (const x of slotList()) x.masterSend.gain.setTargetAtTime(x.set.size === 0 ? 1 : 0, now, 0.03);
+    for (const x of slotList()) x.masterSend.gain.setTargetAtTime(0, now, 0.03);
   }
-  function setFxSources(x, ids) { /* a whole new selection (an empty one = the whole mix) */
+  function setFxSources(x, ids) { /* a whole new selection (an empty one = no input, so no effect) */
     x.set = new Set(ids.map(Number).filter((id) => cfg.stems.some((d) => d.id === id)));
     x.names = [...x.set].map((id) => cfg.stems.find((d) => d.id === id).name);
     renderFx(); applyFx(); keepMicro();
@@ -260,7 +260,7 @@
       const box = el.querySelector('.fxChips');
       box.innerHTML = x.set.size
         ? [...x.set].map((id) => { const d = cfg.stems.find((q) => q.id === id); return `<span class="fxchip" style="--c:${d.color || '#7fb3ff'}"><i></i>${d.name}<button type="button" data-id="${id}" aria-label="Remove ${d.name}" title="Remove">×</button></span>`; }).join('')
-        : '<span class="fxchip all"><i></i>The whole mix</span>';
+        : '<span class="fxchip all"><i></i>Nothing chosen: no effect</span>';
       box.querySelectorAll('button').forEach((b) => b.addEventListener('click', () => toggleFxSource(x, Number(b.dataset.id))));
       const sel = el.querySelector('.fxSource'); sel.innerHTML = '';
       sel.add(new Option('Add an instrument…', ''));
