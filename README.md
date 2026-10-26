@@ -404,3 +404,7 @@ packs/             sample packs (one folder each; see packs/README.md)
 ## Out of scope (per spec)
 
 Biosensors, per-client audio, auth, cloud hosting and recording. The visual layer is still an open decision. The engine page has a simple generative ring visual (one ring per stem, reacting to its level) as a placeholder.
+
+### World percussion
+
+`packs/world-percussion` replaces Pulse and Sub with darbuka, congas and bongos, frame drum and deep drums, played by the `beats` pattern engine (see `packs/README.md`). Load it from the Kits panel, or use the starter kit `kits/world-pulse.json`. Samples are CC0 (VCSL, Karoryfer, Fugue State Audio, Stargate pack); credits are in the pack's `pack.json`.

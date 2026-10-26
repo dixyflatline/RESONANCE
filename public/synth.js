@@ -933,6 +933,42 @@
       s.connect(bp).connect(g).connect(bus); s.start(0); s.stop(m.L + 2.1);
     },
 
+    beats(ctx, out, verb, m) {
+      // A pattern player for one-shot recordings (hand drums, bass drums...). The pack gives each stem `voices` (name -> { files (decoded by the engine into m.samples), gain, pan, lane, tune })
+      // and `tiers`: three objects, voice name -> pattern, for the three complexity layers (0 = the sparse base, 1 and 2 add hits).
+      // A pattern is one line per bar, separated by "|", repeated to fill the loop; each character is one step (`steps` per beat, default 4):
+      //   X accent   x normal   o ghost   p a ghost that only sounds about half the time   . rest
+      // A voice lists its recordings soft to hard; the hit's strength picks among them, with a little random timing, strength and tuning so it breathes.
+      const bus = ctx.createGain(); bus.connect(out); bus.connect(verb.in(0.12));
+      const P = m.pattern || {}, voices = P.voices || {}, tiers = P.tiers || [], spb = Math.max(1, P.steps || 4);
+      const stepsPerBar = m.bpb * spb, total = Math.round(m.L / m.beat) * spb, stepLen = m.beat / spb;
+      const levels = m.tier === null ? [0, 1, 2] : [m.tier], VEL = { X: 1, x: 0.72, o: 0.4, p: 0.5 };
+      const names = Object.keys(voices);
+      for (const lv of levels) {
+        const rnd = mulberry32(hash(`beats:${m.seed ?? ''}:${lv}:${names.join()}`)), pat = tiers[lv] || {};
+        names.forEach((name, vi) => {
+          const line = pat[name], bufs = (m.samples && m.samples[name]) || [], v = voices[name] || {};
+          if (!line || !bufs.length) return;
+          const bars = String(line).split('|').map((q) => q.replace(/\s+/g, '')).filter(Boolean); if (!bars.length) return;
+          const pan = ctx.createStereoPanner(); pan.pan.value = Math.max(-1, Math.min(1, v.pan || 0)); pan.connect(bus);
+          for (let st = 0; st < total; st++) {
+            const bar = Math.floor(st / stepsPerBar), ch = bars[bar % bars.length][st % stepsPerBar];
+            if (!ch || ch === '.' || !(ch in VEL)) continue;
+            const r1 = rnd(), r2 = rnd(), r3 = rnd(), r4 = rnd(); /* always drawn, so a change to one hit leaves the others as they were */
+            if (ch === 'p' && r1 < 0.5) continue;
+            const vel = Math.max(0.15, Math.min(1, VEL[ch] * (0.9 + 0.2 * r2)));
+            const idx = Math.max(0, Math.min(bufs.length - 1, Math.round(vel * (bufs.length - 1) + (r3 - 0.5) * 1.4)));
+            const t = Math.max(0, st * stepLen + (ch === 'X' ? 0 : (r4 - 0.5) * 0.014)); /* accents stay on the grid; the rest drift by a few milliseconds */
+            const src = ctx.createBufferSource(); src.buffer = bufs[idx];
+            src.playbackRate.value = Math.pow(2, ((v.tune || 0) + (r1 - 0.5) * 0.12) / 12);
+            const g = ctx.createGain(); g.gain.value = (v.gain ?? 0.8) * (0.4 + 0.6 * vel);
+            src.connect(g).connect(pan); src.start(t);
+            rec(ctx, t, Math.min(bufs[idx].duration, 0.5), v.lane ?? 36 + vi * 4);
+          }
+        });
+      }
+    },
+
     pulse(ctx, out, verb, m) {
       // A slow collective heartbeat (lub-dub on beats 1 and 3) + soft shaker.
       // Complexity: layer 0 is the heartbeat's first thump only; layer 1 adds the second thump and the shaker's eighth notes;
@@ -1110,7 +1146,7 @@
     const lush = { voices: true, verb: true, ...(opts.lush || {}) };
     // Lush reverb: Drone, Sub and Pulse get a small, short room (their low end stays clean and tight); everything else shares a big
     // hall with 30 ms pre-delay whose wet signal is high-passed at 150 Hz. Pad and Atmos send more into it.
-    const roomy = lush.verb && (synth === 'drone' || synth === 'sub' || synth === 'pulse');
+    const roomy = lush.verb && (synth === 'drone' || synth === 'sub' || synth === 'pulse' || synth === 'beats');
     const ir = !lush.verb ? makeIR(sampleRate, 6, hash(`ir:${seed}`))
       : roomy ? makeSpaceIR(sampleRate, 3, hash(`ir:${seed}`), { pre: 0.008, rt60: 2.2, hiStart: 7000, hiEnd: 900, hiTau: 0.8, onset: 0.012, taps: 5 })
       : makeSpaceIR(sampleRate, 9, hash(`ir:${seed}`));
@@ -1136,6 +1172,7 @@
       },
       forChords(fn) { if (custom) { custom.chords.forEach((c, i) => fn(prog[i], c.start * bar, c.len * bar, i)); return; } const n = Math.max(1, Math.round(L / seg)); for (let i = 0; i < n; i++) fn(CHORDS[i % 4], i * seg, seg, i % 4); },
     };
+    m.seed = seed; m.samples = opts.samples || {}; m.pattern = opts.pattern || null; /* beats: the decoded one-shots and the pack's patterns */
     build(ctx, out, verb, m);
 
     const r = await ctx.startRendering();
@@ -1162,7 +1199,7 @@
 
   /* Synths whose stems have a complexity control (melodic and rhythmic layers): rendered as three same-length loops that play in sync.
      Layer 0 is the sparse base, layers 1 and 2 add notes. The engine fades layers 1 and 2 in and out with the XY pad's X axis. */
-  const TIERED = new Set(['arp', 'bells', 'shimmer', 'melody', 'pulse', 'sub']);
+  const TIERED = new Set(['arp', 'bells', 'shimmer', 'melody', 'pulse', 'sub', 'beats']);
   const hasTiers = (synth) => TIERED.has(synth);
   /* Returns an AudioBuffer. With opts.tiers, the buffer is layer 0 and its `layers` property holds layers 1 and 2. */
   async function renderStem(opts) {

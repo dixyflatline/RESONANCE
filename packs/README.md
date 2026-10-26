@@ -88,6 +88,17 @@ A group picks a **preset** (`core`, `melodic`, `rhythmic`, `nature`, `accent`, `
 
 Presets: **melodic** allows 3 at once with a 4 s cooldown. **rhythmic** allows 2 at once with a 6 s cooldown and quick fades. **core** keeps one layer always on, 3 s cooldown, limited XY range, 8 s fades. **nature** needs 2 people within 10 s, at most 2 at once, 5 s cooldown, fades away after 60 s, 6 s in / 10 s out. **accent** is one at a time, 20 s cooldown, fades away after 30 s. **climax** is the gong: 3 people within 20 s, one strike per vote, at most 3 strikes per performance, XY locked, instant attack (see "The Gong" in the main README). Packs without groups have no rules.
 
+## Pattern drums (`synth: "beats"`)
+
+A stem with `"synth": "beats"` plays one-shot samples from a pattern, so a few recordings become a living loop. See `packs/world-percussion/pack.json`.
+
+- `voices`: `{ name: { files: [soft ... hard], gain, pan, lane, tune } }`. Paths are relative to the pack. More recordings per voice means more natural velocity.
+- `tiers`: three objects (complexity low, mid, high), each `voice name -> pattern`. The pad's X axis fades between them.
+- `steps`: steps per beat (default 4).
+- Pattern characters: `X` accent, `x` normal, `o` ghost, `p` ghost played about half the time, `.` rest. `|` separates bars, which repeat to fill the loop.
+- Each hit varies a little in velocity (which recording), timing (about 7 ms, accents stay on the grid) and tuning, so the loop never repeats exactly.
+- Keep tempo 50 (or a pack tempo that divides the show grid) so the loop lines up.
+
 ## Combined packs
 
 A pack can be built from other packs:

@@ -457,6 +457,14 @@
     if (kind !== 'work') btn._t = setTimeout(() => { btn.textContent = btn.dataset.orig; btn.classList.remove('done'); }, 2500);
   }
   let progressHook = null;
+  /* The one-shot recordings of a 'beats' stem (hand drums etc.): fetched and decoded once, shared by every stem and render. -> { voice name: [AudioBuffer...] } */
+  const sampleCache = new Map();
+  const oneShot = (url) => { if (!sampleCache.has(url)) sampleCache.set(url, fetch(url, { cache: 'force-cache' }).then((r) => { if (!r.ok) throw new Error(`${url}: HTTP ${r.status}`); return r.arrayBuffer(); }).then((ab) => ctx.decodeAudioData(ab))); return sampleCache.get(url); };
+  async function loadVoices(def) {
+    const out = {};
+    for (const [name, urls] of Object.entries(def.voiceUrls || {})) out[name] = await Promise.all(urls.map(oneShot));
+    return out;
+  }
   async function loadAll(tempo = cfg.tempo, defs = cfg.stems) {
     rendering = true;
     let done = 0;
@@ -474,7 +482,9 @@
           if (!res.ok) throw new Error(`${def.file}: HTTP ${res.status}`);
           buf = await ctx.decodeAudioData(await res.arrayBuffer());
         } else {
+          const samples = def.synth === 'beats' ? await loadVoices(def) : undefined;
           buf = await ResonanceSynth.renderStem({
+            samples, pattern: def.synth === 'beats' ? { voices: def.voices, tiers: def.tiers, steps: def.steps } : undefined,
             synth: def.synth, id: def.id, sampleRate: ctx.sampleRate, tempo,
             beatsPerBar: cfg.beatsPerBar, bars: def.bars || 8, key, mode: cfg.mode, progression: def.progression, style: def.style, seed, custom, lush, tiers: !!def.complexity,
           });

@@ -1,0 +1,330 @@
+{
+  "name": "World percussion · hand drums",
+  "description": "Darbuka, congas and bongos, a frame drum and very low drums, played as live patterns from real one-shot recordings (CC0). They replace Pulse and Sub in the Rhythmic group; the pad's X axis still adds notes. Use it through a kit, or on its own.",
+  "tempo": 50,
+  "beatsPerBar": 4,
+  "key": null,
+  "mode": "minor",
+  "license": "CC0 1.0 (public domain): samples from the Stargate sample pack, which collects VCSL (Samuel Gossner), Karoryfer Samples and Fugue State Audio",
+  "credits": [
+    "Darbuka, conga, bongo, bass drum, log drum: VCSL by Samuel Gossner (CC0)",
+    "Frame drum, medieval drums, kick: Karoryfer Samples (Big Rusty Drums, Unruly Drums, Swirly Drums)",
+    "Sub: Fugue State Audio (SDB kit)",
+    "Collected in the Stargate sample pack: github.com/stargatedaw/stargate-sample-pack"
+  ],
+  "source": "https://github.com/stargatedaw/stargate-sample-pack",
+  "tags": [
+    "percussion",
+    "hand drums",
+    "generated patterns",
+    "CC0"
+  ],
+  "order": 8,
+  "sets": [
+    "rhythmic"
+  ],
+  "groups": {
+    "rhythmic": {
+      "name": "Rhythmic",
+      "description": "Hand drums and deep drums. Two at most, entering quickly.",
+      "preset": "rhythmic",
+      "order": 3
+    }
+  },
+  "stems": [
+    {
+      "name": "Darbuka",
+      "role": "hand drum · maqsum",
+      "synth": "beats",
+      "bars": 8,
+      "gain": 0.85,
+      "color": "#e0a24a",
+      "about": "A darbuka playing the classic maqsum rhythm: deep dum on the beat, crisp tek in between. Moving the pad right adds ghost notes and fast rolls.",
+      "steps": 4,
+      "voices": {
+        "dum": {
+          "files": [
+            "samples/darbuka/dum-1.wav",
+            "samples/darbuka/dum-2.wav",
+            "samples/darbuka/dum-3.wav",
+            "samples/darbuka/dum-4.wav"
+          ],
+          "gain": 0.95,
+          "pan": -0.15,
+          "lane": 40,
+          "tune": 0
+        },
+        "tek": {
+          "files": [
+            "samples/darbuka/tek-1.wav",
+            "samples/darbuka/tek-2.wav",
+            "samples/darbuka/tek-3.wav",
+            "samples/darbuka/tek-4.wav"
+          ],
+          "gain": 0.6,
+          "pan": 0.12,
+          "lane": 47,
+          "tune": 0
+        },
+        "ka": {
+          "files": [
+            "samples/darbuka/ka-1.wav",
+            "samples/darbuka/ka-2.wav",
+            "samples/darbuka/ka-3.wav",
+            "samples/darbuka/ka-4.wav"
+          ],
+          "gain": 0.55,
+          "pan": 0.3,
+          "lane": 52,
+          "tune": 0
+        }
+      },
+      "tiers": [
+        {
+          "dum": "X.......x.......|X.......x.....p.",
+          "tek": "......x.....x...|......x.....x.x."
+        },
+        {
+          "tek": "..x.............|..x.......o.....",
+          "ka": "....o.......o...|....o....o..o.o."
+        },
+        {
+          "ka": "..o...o...o...o.|..o...o.o.o...oo",
+          "dum": ".......p.......p|......p........o"
+        }
+      ],
+      "group": "rhythmic"
+    },
+    {
+      "name": "Congas & Bongos",
+      "role": "layered hand drums",
+      "synth": "beats",
+      "bars": 8,
+      "gain": 0.8,
+      "color": "#c4703c",
+      "about": "A relaxed tumbao on congas with bongos answering. More hands join as the pad moves right.",
+      "steps": 4,
+      "voices": {
+        "tumba": {
+          "files": [
+            "samples/conga/tumba-1.wav",
+            "samples/conga/tumba-2.wav",
+            "samples/conga/tumba-3.wav",
+            "samples/conga/tumba-4.wav"
+          ],
+          "gain": 0.95,
+          "pan": -0.3,
+          "lane": 38,
+          "tune": 0
+        },
+        "conga": {
+          "files": [
+            "samples/conga/conga-1.wav",
+            "samples/conga/conga-2.wav",
+            "samples/conga/conga-3.wav"
+          ],
+          "gain": 0.75,
+          "pan": 0.15,
+          "lane": 44,
+          "tune": 0
+        },
+        "quinto": {
+          "files": [
+            "samples/conga/quinto-1.wav",
+            "samples/conga/quinto-2.wav",
+            "samples/conga/quinto-3.wav"
+          ],
+          "gain": 0.6,
+          "pan": 0.35,
+          "lane": 50,
+          "tune": 0
+        },
+        "bongo-lo": {
+          "files": [
+            "samples/bongo/low-1.wav",
+            "samples/bongo/low-2.wav",
+            "samples/bongo/low-3.wav"
+          ],
+          "gain": 0.6,
+          "pan": -0.2,
+          "lane": 54,
+          "tune": 0
+        },
+        "bongo-hi": {
+          "files": [
+            "samples/bongo/high-1.wav",
+            "samples/bongo/high-2.wav",
+            "samples/bongo/high-3.wav"
+          ],
+          "gain": 0.5,
+          "pan": 0.3,
+          "lane": 58,
+          "tune": 0
+        },
+        "bongo-mute": {
+          "files": [
+            "samples/bongo/muted-1.wav",
+            "samples/bongo/muted-2.wav"
+          ],
+          "gain": 0.4,
+          "pan": 0.0,
+          "lane": 56,
+          "tune": 0
+        }
+      },
+      "tiers": [
+        {
+          "tumba": "X.........x.x...|X.........x.x..x",
+          "conga": "......x........."
+        },
+        {
+          "conga": "..x.......x..x..",
+          "bongo-lo": "....x.......x..."
+        },
+        {
+          "quinto": "...x..o....x..o.",
+          "bongo-hi": ".o.o.o.o.o.o.o.o",
+          "bongo-mute": "..p...p...p...p."
+        }
+      ],
+      "group": "rhythmic"
+    },
+    {
+      "name": "Frame drum",
+      "role": "slow heartbeat",
+      "synth": "beats",
+      "bars": 8,
+      "gain": 0.85,
+      "color": "#d9c27a",
+      "about": "A big frame drum breathing slowly like a heartbeat, with a soft jingle drum that appears as the pad moves right.",
+      "steps": 4,
+      "voices": {
+        "frame": {
+          "files": [
+            "samples/frame/frame-16.wav"
+          ],
+          "gain": 0.95,
+          "pan": -0.1,
+          "lane": 42,
+          "tune": 0
+        },
+        "medieval": {
+          "files": [
+            "samples/frame/medieval-20.wav"
+          ],
+          "gain": 0.8,
+          "pan": 0.1,
+          "lane": 36,
+          "tune": 0
+        },
+        "jingle": {
+          "files": [
+            "samples/frame/jingle-14.wav"
+          ],
+          "gain": 0.4,
+          "pan": 0.25,
+          "lane": 60,
+          "tune": 0
+        }
+      },
+      "tiers": [
+        {
+          "frame": "X.......x......."
+        },
+        {
+          "frame": "......o......o..",
+          "medieval": "............x...|................",
+          "jingle": "..x...x...x...x."
+        },
+        {
+          "jingle": "x.x.x.x.x.x.x.x.",
+          "frame": "..o.......o....."
+        }
+      ],
+      "group": "rhythmic"
+    },
+    {
+      "name": "Deep drums",
+      "role": "sub boom",
+      "synth": "beats",
+      "bars": 8,
+      "gain": 0.9,
+      "color": "#8a5a44",
+      "about": "Very low drums: a deep sub and a big bass drum you feel more than hear. A log drum answers as the pad moves right.",
+      "steps": 4,
+      "voices": {
+        "sub": {
+          "files": [
+            "samples/deep/sub.wav"
+          ],
+          "gain": 0.9,
+          "pan": 0.0,
+          "lane": 28,
+          "tune": 0
+        },
+        "bass-drum": {
+          "files": [
+            "samples/deep/bass-drum-1.wav",
+            "samples/deep/bass-drum-2.wav",
+            "samples/deep/bass-drum-3.wav"
+          ],
+          "gain": 0.95,
+          "pan": 0.0,
+          "lane": 32,
+          "tune": 0
+        },
+        "kick": {
+          "files": [
+            "samples/deep/kick-24-open.wav"
+          ],
+          "gain": 0.7,
+          "pan": 0.0,
+          "lane": 34,
+          "tune": 0
+        },
+        "log": {
+          "files": [
+            "samples/deep/log-drum.wav"
+          ],
+          "gain": 0.5,
+          "pan": 0.15,
+          "lane": 48,
+          "tune": 0
+        },
+        "boom": {
+          "files": [
+            "samples/deep/medieval-24.wav"
+          ],
+          "gain": 0.8,
+          "pan": 0.0,
+          "lane": 30,
+          "tune": 0
+        },
+        "march": {
+          "files": [
+            "samples/deep/kick-marching.wav"
+          ],
+          "gain": 0.5,
+          "pan": 0.0,
+          "lane": 36,
+          "tune": 0
+        }
+      },
+      "tiers": [
+        {
+          "sub": "X...............|................",
+          "bass-drum": "........x......."
+        },
+        {
+          "kick": "X...............|..........x.....",
+          "log": "............x..."
+        },
+        {
+          "boom": "................|................|................|X...............",
+          "march": "..o.......o....."
+        }
+      ],
+      "group": "rhythmic"
+    }
+  ]
+}
