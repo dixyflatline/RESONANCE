@@ -136,6 +136,8 @@
   select:disabled, button:disabled { opacity:.6; }
   #dock { position:sticky; bottom:-18px; margin:0 -18px -18px; padding:12px 18px; background:var(--panel); border-top:1px solid var(--line); display:grid; grid-template-columns:1.4fr 1fr; gap:8px; z-index:3; box-shadow:0 -10px 18px rgba(0,0,0,.35); }
   #dock #regen { background:#27406e; border-color:#3d5f9c; font-weight:600; }
+  .liverow .stem[data-state=playing] .dot { background:var(--c); } .livegear { flex:none; align-self:center; padding:4px 8px; font-size:13px; border-radius:8px; } .livegear[aria-expanded=true] { border-color:var(--accent); }
+  #liveDetail { display:flex; flex-direction:column; gap:10px; padding:10px 12px; margin:-2px 0 4px; border:1px solid var(--line); border-radius:10px; background:#0e1224; } #liveDetail[hidden] { display:none; }
   #liveIn { border-top:1px solid var(--line); padding-top:14px; } .livemeter { height:6px; background:#161c36; border-radius:3px; overflow:hidden; } .livemeter i { display:block; height:100%; width:0; background:#5fd39a; transition:width .08s; } .liveroutes { display:flex; flex-direction:column; gap:6px; } #liveOn[aria-pressed=true] { background:#27406e; border-color:#3d5f9c; } #liveNote.err { color:#ffb4a8; }
   @media (max-width: 1000px) { body { grid-template-columns:1fr; grid-template-rows:auto auto 60vh; height:auto; } #fxpanel { border-right:0; border-top:1px solid var(--line); border-bottom:1px solid var(--line); } }
 #bpmRow{display:flex;align-items:center;gap:4px}#bpmRow input{flex:1;min-width:0}#bpmRow button{width:40px;padding:6px 0;font-size:20px;line-height:1}#bpmNow{font-size:26px;margin-left:6px;vertical-align:middle}#bpmTgt{margin-left:8px}
@@ -222,20 +224,6 @@
   <div class="fxlive">
     <div class="fxtabs" id="fxTabs" role="tablist"></div>
     <div id="fxSlots"></div>
-    <div id="liveIn" class="fxslot">
-      <div class="row"><div><div class="fxslotname">Live input</div><div class="fxhint">Play or sing into the Mac: the microphone, a 3.5 mm input or an audio interface goes through the effect boxes.</div></div><button id="liveOn" type="button" aria-pressed="false">Off</button></div>
-      <label><span class="label">Input device</span><select id="liveDev" aria-label="Audio input device"><option value="">Default input</option></select></label>
-      <label><span class="label">Level <span id="liveGv"></span></span><input id="liveGain" type="range" min="0" max="2" step="0.01" value="1"></label>
-      <div class="livemeter" aria-hidden="true"><i id="liveMeter"></i></div>
-      <div class="label">Send to</div>
-      <div class="liveroutes">
-        <label class="fxchk"><input type="checkbox" id="liveA" checked><span>Box A (arps / plucks)</span></label>
-        <label class="fxchk"><input type="checkbox" id="liveB"><span>Box B (long tones)</span></label>
-        <label class="fxchk" title="Also play the unprocessed input. Off = only what comes out of the effect."><input type="checkbox" id="liveDry"><span>Hear the dry input too</span></label>
-        <label class="fxchk" title="Echo cancellation and noise suppression: helps when speakers are close to the microphone, but dulls instruments and line inputs."><input type="checkbox" id="liveClean"><span>Clean up (echo cancel, noise reduction)</span></label>
-      </div>
-      <div class="fxhint" id="liveNote">Use headphones with the built-in microphone, or the speakers will feed back into it. The chosen box must be On.</div>
-    </div>
   </div>
   <template id="fxSlotTpl">
     <div class="fxslot">

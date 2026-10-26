@@ -269,7 +269,7 @@
       el.querySelector('.fxClear').disabled = x.set.size === 0;
       const md = el.querySelector('.fxMuteDry'); md.disabled = x.set.size === 0; if (x.set.size === 0) { md.checked = false; x.muteDry = false; }
     }
-    document.querySelectorAll('.fxbtn').forEach((b) => { const x = slots[b.dataset.slot]; b.classList.toggle('on', !!x && x.set.has(Number(b.dataset.id))); });
+    document.querySelectorAll('.fxbtn:not(.livefx)').forEach((b) => { const x = slots[b.dataset.slot]; b.classList.toggle('on', !!x && x.set.has(Number(b.dataset.id))); });
   }
   function fillFxSources() { /* (called when the stem list is built, and after a pack switch: the same instruments by name, when the new pack has them) */
     for (const x of slotList()) {
@@ -338,45 +338,53 @@
 
 
   // ---------------- Live input (microphone / 3.5 mm / interface) ----------------
-  // input -> level -> sends into effect box A and/or B (and optionally a dry monitor into the compressor).
-  const live = { on: false, stream: null, src: null, trim: null, an: null, sends: {}, dry: null, buf: null };
+  // A row at the top of the instrument list: the button starts / stops the input, A / B send it into the effect boxes,
+  // the gear opens device, level and monitoring. Audio: input -> level -> sends into box A / B (+ optional dry into the compressor).
+  const live = { on: false, starting: false, stream: null, src: null, trim: null, an: null, sends: {}, dry: null, buf: null };
   const LS = 'resonance.livein';
-  const liveSaved = (() => { try { return JSON.parse(localStorage.getItem(LS) || '{}') || {}; } catch { return {}; } })();
-  const keepLive = () => { try { localStorage.setItem(LS, JSON.stringify({ dev: $('#liveDev').value, gain: Number($('#liveGain').value), a: $('#liveA').checked, b: $('#liveB').checked, dry: $('#liveDry').checked, clean: $('#liveClean').checked })); } catch { /* storage unavailable */ } };
-  function liveNote(t, err) { const n = $('#liveNote'); n.textContent = t; n.classList.toggle('err', !!err); }
+  const L = Object.assign({ dev: '', gain: 1, a: true, b: false, dry: false, clean: false, open: false }, (() => { try { return JSON.parse(localStorage.getItem(LS) || '{}') || {}; } catch { return {}; } })());
+  const keepLive = () => { try { localStorage.setItem(LS, JSON.stringify(L)); } catch { /* storage unavailable */ } };
+  let liveMsg = '', liveErr = false, liveDevs = [];
+  function liveNote(t, err) { liveMsg = t; liveErr = !!err; const n = $('#liveNote'); if (n) { n.textContent = t; n.classList.toggle('err', !!err); } }
   function liveRoute() {
+    for (const k of ['a', 'b']) document.querySelectorAll(`.fxbtn.livefx[data-slot="${k}"]`).forEach((b) => b.classList.toggle('on', !!L[k]));
+    const gv = $('#liveGv'); if (gv) gv.textContent = Math.round(L.gain * 100) + '%';
+    const b = $('#liveOn'); if (b) { b.dataset.state = live.on ? 'playing' : live.starting ? 'starting' : 'off'; b.querySelector('.st').textContent = live.on ? 'live' : live.starting ? 'starting' : ''; }
     if (!live.on) return;
-    const now = ctx.currentTime, want = { a: $('#liveA').checked, b: $('#liveB').checked };
-    for (const k of ['a', 'b']) live.sends[k].gain.setTargetAtTime(want[k] ? 1 : 0, now, 0.03);
-    live.dry.gain.setTargetAtTime($('#liveDry').checked ? 1 : 0, now, 0.03);
-    live.trim.gain.setTargetAtTime(Number($('#liveGain').value), now, 0.03);
-    $('#liveGv').textContent = Math.round(Number($('#liveGain').value) * 100) + '%';
-    const off = ['a', 'b'].filter((k) => want[k] && slots[k] && !slots[k].micro.enabled).map((k) => k.toUpperCase());
-    if (off.length) liveNote(`Box ${off.join(' and ')} is Off: turn it On to hear the input.`);
-    else if (!want.a && !want.b && !$('#liveDry').checked) liveNote('Nothing is selected to listen: pick a box, or hear the dry input.');
+    const now = ctx.currentTime;
+    for (const k of ['a', 'b']) live.sends[k].gain.setTargetAtTime(L[k] ? 1 : 0, now, 0.03);
+    live.dry.gain.setTargetAtTime(L.dry ? 1 : 0, now, 0.03);
+    live.trim.gain.setTargetAtTime(L.gain, now, 0.03);
+    const off = ['a', 'b'].filter((k) => L[k] && slots[k] && !slots[k].micro.enabled).map((k) => k.toUpperCase());
+    if (off.length) liveNote(`Effect box ${off.join(' and ')} is Off: turn it On (right panel) to hear the input.`);
+    else if (!L.a && !L.b && !L.dry) liveNote('Nothing to listen to: send it to A or B, or tick "Hear the dry input".');
     else liveNote('Use headphones with the built-in microphone, or the speakers will feed back into it.');
   }
   async function listInputs() {
     try {
-      const devs = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === 'audioinput'), sel = $('#liveDev'), cur = sel.value || liveSaved.dev || '';
+      liveDevs = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === 'audioinput' && d.deviceId && d.deviceId !== 'default');
+      const sel = $('#liveDev'); if (!sel) return;
       sel.innerHTML = ''; sel.add(new Option('Default input', ''));
-      devs.forEach((d, i) => { if (d.deviceId && d.deviceId !== 'default') sel.add(new Option(d.label || 'Input ' + (i + 1), d.deviceId)); });
-      sel.value = [...sel.options].some((o) => o.value === cur) ? cur : '';
+      liveDevs.forEach((d, i) => sel.add(new Option(d.label || 'Input ' + (i + 1), d.deviceId)));
+      sel.value = [...sel.options].some((o) => o.value === L.dev) ? L.dev : '';
+      const role = $('#liveRole'); if (role) role.textContent = sel.value ? sel.selectedOptions[0].text : 'microphone · 3.5 mm · interface';
     } catch { /* no device list */ }
   }
-  async function liveStop() {
+  function liveStop() {
     if (live.stream) live.stream.getTracks().forEach((t) => t.stop());
     for (const n of [live.src, live.trim, live.an, live.dry, ...Object.values(live.sends)]) { try { n && n.disconnect(); } catch { /* gone */ } }
-    Object.assign(live, { on: false, stream: null, src: null, trim: null, an: null, sends: {}, dry: null });
-    const b = $('#liveOn'); b.textContent = 'Off'; b.setAttribute('aria-pressed', 'false'); $('#liveMeter').style.width = '0';
+    Object.assign(live, { on: false, starting: false, stream: null, src: null, trim: null, an: null, sends: {}, dry: null });
+    const m = $('#liveMeter'); if (m) m.style.width = '0';
+    liveRoute();
   }
   async function liveStart() {
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { liveNote('This page cannot use the microphone. Open it as http://localhost:… on this Mac (not the network address).', true); return; }
-    await liveStop();
-    const clean = $('#liveClean').checked, dev = $('#liveDev').value;
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { liveNote('This page cannot use the microphone. Open it as http://localhost:… on this Mac (not the network address).', true); openLive(true); return; }
+    if (!ctx) { liveNote('Start the engine first.', true); openLive(true); return; }
+    liveStop(); live.starting = true; liveRoute();
     try {
-      live.stream = await navigator.mediaDevices.getUserMedia({ audio: { deviceId: dev ? { exact: dev } : undefined, echoCancellation: clean, noiseSuppression: clean, autoGainControl: false, channelCount: { ideal: 2 }, latency: 0 } });
+      live.stream = await navigator.mediaDevices.getUserMedia({ audio: { deviceId: L.dev ? { exact: L.dev } : undefined, echoCancellation: L.clean, noiseSuppression: L.clean, autoGainControl: false, channelCount: { ideal: 2 }, latency: 0 } });
     } catch (e) {
+      live.starting = false; liveRoute(); openLive(true);
       liveNote(e && e.name === 'NotAllowedError' ? 'The browser blocked the microphone. Allow it for this site (the icon in the address bar), then try again.' : 'Could not open that input: ' + (e && e.message || e), true);
       return;
     }
@@ -385,23 +393,45 @@
     live.src.connect(live.trim); live.trim.connect(live.an);
     for (const k of ['a', 'b']) { const g = ctx.createGain(); g.gain.value = 0; live.trim.connect(g); if (slots[k]) g.connect(slots[k].micro.input); live.sends[k] = g; }
     live.dry = ctx.createGain(); live.dry.gain.value = 0; live.trim.connect(live.dry); live.dry.connect(compNode);
-    live.on = true; const b = $('#liveOn'); b.textContent = 'On'; b.setAttribute('aria-pressed', 'true');
+    live.on = true; live.starting = false;
     liveRoute(); await listInputs(); /* (device names appear once the permission is given) */
   }
+  function openLive(open) { L.open = open; const d = $('#liveDetail'), g = $('#liveGear'); if (d) d.hidden = !open; if (g) g.setAttribute('aria-expanded', String(open)); keepLive(); }
+  function mountLiveRow() { /* (called each time the instrument list is rebuilt) */
+    const host = $('#stems'); if (!host) return;
+    const wrap = document.createElement('div');
+    wrap.innerHTML = `<div class="stemrow liverow" style="--c:#5fd39a"><button class="stem" id="liveOn" type="button" data-state="off" style="--c:#5fd39a" title="Start / stop the Mac's microphone, 3.5 mm input or audio interface"><span class="dot"></span><span class="name">Live input</span><span class="role" id="liveRole">microphone · 3.5 mm · interface</span><span class="st"></span></button><span class="fxbtns"></span><button class="livegear" id="liveGear" type="button" aria-expanded="false" title="Input device, level and monitoring">⚙</button></div>
+      <div id="liveDetail" hidden>
+        <label><span class="label">Input device</span><select id="liveDev" aria-label="Audio input device"><option value="">Default input</option></select></label>
+        <label><span class="label">Level <span id="liveGv"></span></span><input id="liveGain" type="range" min="0" max="2" step="0.01"></label>
+        <div class="livemeter" aria-hidden="true"><i id="liveMeter"></i></div>
+        <label class="fxchk" title="Also play the unprocessed input. Off = only what comes out of the effect."><input type="checkbox" id="liveDry"><span>Hear the dry input too</span></label>
+        <label class="fxchk" title="Echo cancellation and noise suppression: helps when speakers are close to the microphone, but dulls instruments and line inputs."><input type="checkbox" id="liveClean"><span>Clean up (echo cancel, noise reduction)</span></label>
+        <div class="fxhint" id="liveNote"></div>
+      </div>`;
+    while (wrap.lastChild) host.insertBefore(wrap.lastChild, host.firstChild);
+    const fb = host.querySelector('.liverow .fxbtns');
+    for (const d of SLOTS) {
+      const fx = document.createElement('button'); fx.type = 'button'; fx.className = 'fxbtn livefx'; fx.dataset.slot = d.key; fx.textContent = d.tab;
+      fx.title = `Send the live input into Microcosm box ${d.tab} (${d.name}). Click again to remove it.`;
+      fx.addEventListener('click', () => { L[d.key] = !L[d.key]; keepLive(); liveRoute(); }); fb.appendChild(fx);
+    }
+    $('#liveOn').addEventListener('click', () => { if (live.on || live.starting) liveStop(); else liveStart(); });
+    $('#liveGear').addEventListener('click', () => openLive(!L.open));
+    $('#liveGain').value = L.gain; $('#liveDry').checked = L.dry; $('#liveClean').checked = L.clean;
+    $('#liveGain').addEventListener('input', (e) => { L.gain = Number(e.target.value); keepLive(); liveRoute(); });
+    $('#liveDry').addEventListener('change', (e) => { L.dry = e.target.checked; keepLive(); liveRoute(); });
+    $('#liveClean').addEventListener('change', (e) => { L.clean = e.target.checked; keepLive(); if (live.on) liveStart(); });
+    $('#liveDev').addEventListener('change', (e) => { L.dev = e.target.value; keepLive(); if (live.on) liveStart(); else listInputs(); });
+    openLive(L.open); liveNote(liveMsg || 'Use headphones with the built-in microphone, or the speakers will feed back into it.', liveErr);
+    listInputs(); liveRoute();
+  }
   function initLiveUI() {
-    if (!slotList().length) { $('#liveIn').hidden = true; return; }
-    $('#liveGain').value = liveSaved.gain ?? 1; $('#liveA').checked = liveSaved.a ?? true; $('#liveB').checked = !!liveSaved.b; $('#liveDry').checked = !!liveSaved.dry; $('#liveClean').checked = !!liveSaved.clean;
-    $('#liveGv').textContent = Math.round(Number($('#liveGain').value) * 100) + '%';
-    listInputs();
-    $('#liveOn').addEventListener('click', () => { if (live.on) liveStop(); else liveStart(); });
-    for (const id of ['#liveA', '#liveB', '#liveDry', '#liveGain']) $(id).addEventListener('input', () => { liveRoute(); keepLive(); });
-    $('#liveDev').addEventListener('change', () => { keepLive(); if (live.on) liveStart(); });
-    $('#liveClean').addEventListener('change', () => { keepLive(); if (live.on) liveStart(); });
-    if (navigator.mediaDevices) navigator.mediaDevices.addEventListener?.('devicechange', listInputs);
+    if (navigator.mediaDevices && navigator.mediaDevices.addEventListener) navigator.mediaDevices.addEventListener('devicechange', listInputs);
     setInterval(() => {
       if (!live.on) return;
       live.an.getFloatTimeDomainData(live.buf); let p = 0; for (let i = 0; i < live.buf.length; i++) p = Math.max(p, Math.abs(live.buf[i]));
-      $('#liveMeter').style.width = Math.min(100, Math.round(Math.sqrt(p) * 100)) + '%'; $('#liveMeter').style.background = p > 0.9 ? '#ef5a4a' : '#5fd39a';
+      const m = $('#liveMeter'); if (m) { m.style.width = Math.min(100, Math.round(Math.sqrt(p) * 100)) + '%'; m.style.background = p > 0.9 ? '#ef5a4a' : '#5fd39a'; }
       liveRoute();
     }, 150);
   }
@@ -883,6 +913,7 @@
         row.insertBefore(wrap, mini);
       }
     });
+    mountLiveRow();
     fillFxSources();
     if (!sheet) sheet = ResonanceXY.createSheet({
       send,
@@ -894,7 +925,7 @@
 
   function renderRows() {
     const now = ctx ? ctx.currentTime : 0;
-    document.querySelectorAll('.stem').forEach((b) => {
+    document.querySelectorAll('.stem[data-id]').forEach((b) => {
       const id = Number(b.dataset.id), st = stems.get(id);
       const want = desired.has(id);
       const sounding = st && ((st.voice && st.voice.start <= now) || st.stopUntil > now);

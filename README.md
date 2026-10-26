@@ -408,3 +408,7 @@ Biosensors, per-client audio, auth, cloud hosting and recording. The visual laye
 ### World percussion
 
 `packs/world-percussion` replaces Pulse and Sub with darbuka, congas and bongos, frame drum and deep drums, played by the `beats` pattern engine (see `packs/README.md`). Load it from the Kits panel, or use the starter kit `kits/world-pulse.json`. Samples are CC0 (VCSL, Karoryfer, Fugue State Audio, Stargate pack); credits are in the pack's `pack.json`.
+
+### Live input
+
+The Microcosm panel has a **Live input** section: switch it on to send the Mac's microphone, 3.5 mm input or an audio interface through effect box A and/or B (box must be On). "Hear the dry input too" is off by default so only the effect is heard. Use headphones with the built-in microphone. The engine page must be opened as `http://localhost:…` for the browser to allow the microphone.
