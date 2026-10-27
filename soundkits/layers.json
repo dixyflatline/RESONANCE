@@ -1,0 +1,12 @@
+{
+  "name": "Layers",
+  "description": "The original sounds: a warm pad, a sub bass, a plucked arp, Melody A the glide lead and Melody B the acid line.",
+  "order": 1,
+  "voices": {
+    "chords": "pad",
+    "bass": "sub",
+    "arp": "pluck",
+    "melodyA": "glide",
+    "melodyB": "acid"
+  }
+}

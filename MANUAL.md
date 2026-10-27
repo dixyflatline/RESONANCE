@@ -97,17 +97,17 @@ The effect hears the instrument after its own pad settings (cutoff and volume). 
 
 Tip: turn Mix down before you change preset during a quiet moment, and raise **Repeats** slowly. High Repeats on Haze or Tunnel builds a thick wash.
 
-## 7. Kits: changing the Melodic and Rhythmic sounds during a show
+## 7. Kit, templates and favorites: changing the Melodic and Rhythmic sounds during a show
 
-A **kit** is a curated set of sounds you trust: one **sound set** for the Melodic group, one for the Rhythmic group, and optionally the settings of both Microcosm boxes. Loading a kit changes the melodic and rhythmic voices without stopping the show: **Core synth** and the **nature samples** keep playing and sustain the sound while the swap happens.
+The sounds are chosen in three steps. A **kit** is the *sound* of the melodic roles (Chords, Bass, Arp, Melody A, Melody B). A **template** decides the *notes* (the chord progression and what each role plays). A **favorite** saves a combination you trust: kit + melodic template + rhythmic template + the settings of both Microcosm boxes. Loading changes the melodic and rhythmic voices without stopping the show: **Core synth** and the **nature samples** keep playing and sustain the sound while the swap happens.
 
-Click **Kits…** at the top of the effect column. The button then shows the name of the live kit.
+Click **Kit · Templates…** at the top of the effect column. The button then shows the name of the live favorite.
 
-- **Saved kits** list their sounds. **Load** fades out the Melodic and Rhythmic stems that are playing (using their normal fade-out times), waits until those groups are silent, then puts the new sounds in. The new sounds start off, ready for the audience or for you to switch on. During the wait phones say "changing sounds…" and cannot start those stems. If something has not faded after 45 seconds the swap happens anyway.
-- **Pick sounds** lets you choose any available sound set for Melodic and Rhythmic from the menus, then **Load these sounds**. “Pack's own” returns that group to the sounds the live pack came with. Sets that don't fit (recorded loops at another tempo, or generated sounds in another harmony such as major) are greyed out with the reason.
-- **Save kit** stores what is live: the Melodic and Rhythmic sets, plus both Microcosm boxes (presets, knobs, which instruments feed A and B). Saving under the same name updates the kit. A kit that has Microcosm settings applies them as soon as its sounds are in; instruments are matched by name.
+- **1 · Kit.** Pick the sound. Melody A and Melody B are *voices*: with the Layers kit Melody A is the glide lead and Melody B the acid line, and they play whatever melody the template generates, with their extra notes (the pad's X axis) in the same sound. *Make or change a kit* lets you choose a voice for each role and save it under a name. Kits with recordings are folders in `soundkits/`.
+- **2 · Templates.** Pick the Melodic template (for example *Gospel*, *House*, *Jazz*, or *Long lines* for the slow ambient notes) and the Rhythmic template (a groove such as *Tresillo* or *Four on the floor*, the seed-picked Rhythmic synth, or the hand drums). Templates that don't fit (recorded loops at another tempo, or generated sounds in another harmony such as major) are greyed out with the reason. Then **Load kit + templates**: the Melodic and Rhythmic stems that are playing fade out (their normal fade-out times), the new sounds go in once those groups are silent, and they start off, ready for the audience or for you to switch on. During the wait phones say "changing sounds…" and cannot start those stems. If something has not faded after 45 seconds the swap happens anyway.
+- **3 · Favorites.** **Load** puts a saved combination in. **Save favorite** stores what is live: the kit, both templates and both Microcosm boxes (presets, knobs, which instruments feed A and B). Saving under the same name updates it. A favorite that has Microcosm settings applies them as soon as its sounds are in; instruments are matched by name. *New variation* in an instrument's pad window still re-rolls that instrument's notes inside the chosen template and kit.
 
-Kits are plain files in the `kits/` folder (see README). The sounds come from packs: any pack of generated or recorded stems can be a sound set. Rendering the new generated stems takes some seconds after they are swapped in, longer on a slow computer, so load a kit between phrases rather than at a climax.
+Kits and favorites are plain files in `soundkits/` and `favorites/` (see README). Rendering the new generated stems takes some seconds after they are swapped in, longer on a slow computer, so load a favorite between phrases rather than at a climax.
 
 ## 8. Rehearsal: simulated audience and monitor
 

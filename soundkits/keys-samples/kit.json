@@ -1,0 +1,32 @@
+{
+  "name": "Electric keys (samples)",
+  "description": "Recorded-style notes repitched across the keyboard: an electric piano for chords, arp and Melody A, a round bass, and a synth bell for Melody B. Shows how a kit uses audio files (generated here: CC0).",
+  "order": 20,
+  "voices": {
+    "chords": {
+      "voice": "sample",
+      "file": "keys-c4.wav",
+      "root": 60,
+      "gain": 1.5
+    },
+    "bass": {
+      "voice": "sample",
+      "file": "bass-c2.wav",
+      "root": 36,
+      "gain": 1.8
+    },
+    "arp": {
+      "voice": "sample",
+      "file": "keys-c4.wav",
+      "root": 60,
+      "gain": 1.6
+    },
+    "melodyA": {
+      "voice": "sample",
+      "file": "keys-c4.wav",
+      "root": 60,
+      "gain": 1
+    },
+    "melodyB": "bell"
+  }
+}

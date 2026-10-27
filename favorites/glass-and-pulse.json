@@ -1,6 +1,7 @@
 {
   "name": "Glass and pulse",
   "description": "Arp, bells, shimmer and the two lead lines, with the arp chopped by the plucks box and the lead melting in the long-tone box.",
+  "kit": "layers",
   "melodic": "melodic-synth",
   "rhythmic": "rhythmic-synth",
   "order": 3,

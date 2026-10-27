@@ -1,0 +1,12 @@
+{
+  "name": "Analog",
+  "description": "Mono synths everywhere: an acid bass, an acid arp, and two glide leads.",
+  "order": 3,
+  "voices": {
+    "chords": "pad",
+    "bass": "acid",
+    "arp": "acid",
+    "melodyA": "glide",
+    "melodyB": "glide"
+  }
+}

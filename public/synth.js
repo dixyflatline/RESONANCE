@@ -648,29 +648,35 @@
   /* Glide lead: an analog mono-synth voice. Two detuned saws and a square an octave down through a resonant low-pass that opens
      on each note and settles, a little tanh warmth, and a slow vibrato that fades in. Notes in a phrase are joined by a long
      exponential glide (portamento) that takes 55-80% of the new note; the first note scoops up into pitch from two semitones below over 1.2 s and the sound fades in over 2.2 s. */
-  function glideLead(ctx, dest, { notes, pan = -0.15, gain = 0.1, rnd }) {
+  function glideLead(ctx, dest, { notes, pan = -0.15, gain = 0.1, rnd, fast = false }) {
     for (const nt of notes) rec(ctx, nt.t, nt.d, nt.n);
+    const F = fast; /* fast: the same sound for note-by-note melodies, with an attack, glides and filter moves that fit short notes (the slow set is for notes of whole bars) */
     const t0 = notes[0].t, last = notes[notes.length - 1], tEnd = last.t + last.d;
-    const amp = ctx.createGain(); amp.gain.setValueAtTime(0, t0); amp.gain.linearRampToValueAtTime(gain, t0 + 2.2); // enters gently: a 2.2 s fade-in
-    amp.gain.setValueAtTime(gain, Math.max(t0 + 2.3, tEnd - 0.8)); amp.gain.setTargetAtTime(0, Math.max(t0 + 2.3, tEnd - 0.8), 0.7);
+    const fin = F ? 0.04 : 2.2;
+    const amp = ctx.createGain(); amp.gain.setValueAtTime(0, t0); amp.gain.linearRampToValueAtTime(gain, t0 + fin); // enters gently (2.2 s) or quickly (40 ms)
+    const rel = F ? Math.max(t0 + fin + 0.01, tEnd - 0.05) : Math.max(t0 + 2.3, tEnd - 0.8);
+    if (F) notes.forEach((nt, k) => { if (k > 0 && nt.t > t0 + fin + 0.02 && nt.t < rel - 0.07) { amp.gain.setValueAtTime(gain * 0.72, nt.t); amp.gain.linearRampToValueAtTime(gain, nt.t + 0.06); } }); /* a small re-gate on each joined note so repeated pitches are heard */
+    amp.gain.setValueAtTime(gain, rel); amp.gain.setTargetAtTime(0, rel, F ? 0.1 : 0.7);
     const sat = ctx.createWaveShaper(); sat.curve = driveCurve(1.8); sat.oversample = '2x';
     const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.Q.value = 3.5;
     const p = ctx.createStereoPanner(); p.pan.value = pan;
     lp.connect(sat).connect(amp).connect(p).connect(dest);
-    const vib = ctx.createOscillator(); vib.frequency.value = 5 + rnd() * 0.8;
-    const vg = ctx.createGain(); vg.gain.setValueAtTime(0, t0); vg.gain.linearRampToValueAtTime(7, t0 + 2.5); vib.connect(vg);
-    const end = tEnd + 4.5; vib.start(t0); vib.stop(end);
+    const vib = ctx.createOscillator(); vib.frequency.value = 5 + (rnd ? rnd() : 0.5) * 0.8;
+    const vg = ctx.createGain(); vg.gain.setValueAtTime(0, t0); vg.gain.linearRampToValueAtTime(7, t0 + (F ? 0.4 : 2.5)); vib.connect(vg);
+    const end = tEnd + (F ? 1.5 : 4.5); vib.start(t0); vib.stop(end);
     const cut = (n) => Math.min(2400, Math.max(550, mtof(n) * 4.2));
-    notes.forEach((nt, k) => { // filter opens on each note, then settles
-      const base = cut(nt.n); lp.frequency.setTargetAtTime(base * 1.8, nt.t, 0.7); lp.frequency.setTargetAtTime(base * 0.85, nt.t + 2, 1.5); // the filter opens slowly too
+    notes.forEach((nt) => { // filter opens on each note, then settles
+      const base = cut(nt.n);
+      if (F) { lp.frequency.setTargetAtTime(base * 2.2, nt.t, 0.05); lp.frequency.setTargetAtTime(base * 0.9, nt.t + Math.min(0.15, nt.d * 0.4), 0.25); }
+      else { lp.frequency.setTargetAtTime(base * 1.8, nt.t, 0.7); lp.frequency.setTargetAtTime(base * 0.85, nt.t + 2, 1.5); } // the filter opens slowly too
     });
     [['sawtooth', -7, 1, 1], ['sawtooth', 7, 1, 1], ['square', 0, 0.5, 0.55]].forEach(([type, det, mul, g]) => {
       const o = ctx.createOscillator(); o.type = type; o.detune.value = det; vg.connect(o.detune);
       const og = ctx.createGain(); og.gain.value = g * 0.5; o.connect(og).connect(lp);
       const f0 = mtof(notes[0].n) * mul;
-      o.frequency.setValueAtTime(f0 * Math.pow(2, -2 / 12), t0); o.frequency.exponentialRampToValueAtTime(f0, t0 + 1.2);
+      o.frequency.setValueAtTime(f0 * Math.pow(2, (F ? -1 : -2) / 12), t0); o.frequency.exponentialRampToValueAtTime(f0, t0 + (F ? 0.06 : 1.2));
       for (let k = 1; k < notes.length; k++) {
-        const fp = mtof(notes[k - 1].n) * mul, fk = mtof(notes[k].n) * mul, gl = notes[k].d * (0.55 + rnd() * 0.25); // the glide takes 55-80% of the new note
+        const fp = mtof(notes[k - 1].n) * mul, fk = mtof(notes[k].n) * mul, gl = F ? Math.min(0.14, notes[k].d * 0.5) : notes[k].d * (0.55 + (rnd ? rnd() : 0.5) * 0.25); // the glide takes 55-80% of a long note, or at most 140 ms of a short one
         o.frequency.setValueAtTime(fp, notes[k].t); o.frequency.exponentialRampToValueAtTime(fk, notes[k].t + gl);
       }
       o.start(t0); o.stop(end);
@@ -681,9 +687,10 @@
      tanh distortion, and a filter that swells open at the start of each note then settles: accented notes open wider and
      are louder. Everything is slow: a 4 s fade-in with the filter closed at first, slides that take 55-80% of the note, a 0.5 s release. Long notes also get a slow filter "wail" halfway through, and a slow LFO drifts the cutoff. Notes that join a
      phrase are 303-style slides, slowed right down: the glide takes 55-80% of the note, with the gate held (no new attack). */
-  function acidVoice(ctx, dest, { notes, pan = 0.2, gain = 0.08, rnd, L, bar }) {
+  function acidVoice(ctx, dest, { notes, pan = 0.2, gain = 0.08, rnd, L, bar, fast = false }) {
     for (const nt of notes) rec(ctx, nt.t, nt.d, nt.n);
-    const t0 = notes[0].t, last = notes[notes.length - 1], tEnd = last.t + last.d, end = tEnd + 4;
+    const F = fast || notes.some((x) => !x.join && x.d < 4.2); /* fast: quick attack, slides and filter moves for note-by-note lines (also when a note is too short for the 4 s fade-in) */
+    const t0 = notes[0].t, last = notes[notes.length - 1], tEnd = last.t + last.d, end = tEnd + (F ? 1 : 4);
     const o = ctx.createOscillator(); o.type = rnd() < 0.7 ? 'sawtooth' : 'square';
     const lp1 = ctx.createBiquadFilter(); lp1.type = 'lowpass'; lp1.Q.value = 10;
     const lp2 = ctx.createBiquadFilter(); lp2.type = 'lowpass'; lp2.Q.value = 1; lp2.frequency.value = 3200;
@@ -697,26 +704,96 @@
       const f = mtof(nt.n), floor = 260 + rnd() * 140, peak = nt.accent ? 3600 : 2300 + rnd() * 500, lvl = gain * (nt.accent ? 1.3 : 1);
       if (k === 0) o.frequency.setValueAtTime(f, nt.t);
       if (!nt.join) { // enters gently: a 4 s cosine fade-in, with the filter held low for the first second, then swelling open
-        const n = 64, cv = new Float32Array(n); for (let q = 0; q < n; q++) cv[q] = lvl * (0.5 - 0.5 * Math.cos(Math.PI * q / (n - 1)));
-        amp.gain.setValueCurveAtTime(cv, nt.t, 4);
+        if (F) { amp.gain.setValueAtTime(0, nt.t); amp.gain.linearRampToValueAtTime(lvl, nt.t + 0.015); }
+        else { const n = 64, cv = new Float32Array(n); for (let q = 0; q < n; q++) cv[q] = lvl * (0.5 - 0.5 * Math.cos(Math.PI * q / (n - 1))); amp.gain.setValueCurveAtTime(cv, nt.t, 4); }
         lp1.frequency.setValueAtTime(floor * 0.9, nt.t);
       } else { // slide: glide the pitch, hold the gate, level follows the accent
-        const fp = mtof(notes[k - 1].n), gl = nt.d * (0.55 + rnd() * 0.25); // a slow slide: 55-80% of the new note
+        const fp = mtof(notes[k - 1].n), gl = F ? Math.min(0.09, nt.d * 0.5) : nt.d * (0.55 + rnd() * 0.25); // a slow slide: 55-80% of the new note
         o.frequency.setValueAtTime(fp, nt.t); o.frequency.exponentialRampToValueAtTime(f, nt.t + gl);
-        amp.gain.setTargetAtTime(lvl, nt.t, 0.6);
+        if (F) { amp.gain.setValueAtTime(lvl * 0.6, nt.t); amp.gain.setTargetAtTime(lvl, nt.t, 0.03); } else amp.gain.setTargetAtTime(lvl, nt.t, 0.6);
       }
       // The tone moves as slowly as the glide: one long swell per note, opening over ~the first half and closing over the rest,
       // with time constants that scale with the note (no quick snaps).
       const open = (nt.accent ? 2600 : 1400) + rnd() * 500;
-      lp1.frequency.setTargetAtTime(open, nt.t + nt.d * 0.1, Math.max(1.5, nt.d * 0.28));
-      lp1.frequency.setTargetAtTime(floor * 1.2, nt.t + nt.d * 0.6, Math.max(1.5, nt.d * 0.25));
+      if (F) { lp1.frequency.setTargetAtTime(open, nt.t, 0.04); lp1.frequency.setTargetAtTime(floor * 1.2, nt.t + Math.min(0.2, nt.d * 0.4), 0.15); }
+      else { lp1.frequency.setTargetAtTime(open, nt.t + nt.d * 0.1, Math.max(1.5, nt.d * 0.28)); lp1.frequency.setTargetAtTime(floor * 1.2, nt.t + nt.d * 0.6, Math.max(1.5, nt.d * 0.25)); }
     });
-    amp.gain.setTargetAtTime(0, tEnd - 0.5, 0.55);
+    amp.gain.setTargetAtTime(0, tEnd - (F ? 0.03 : 0.5), F ? 0.06 : 0.55);
     o.start(t0); o.stop(end);
   }
 
-  function longMelody(ctx, out, verb, m) {
-    const acid = m.style === 'acid';
+  // ---------- voices: the sound of a role, apart from the notes ----------
+  /* A generator (melody, arp, chords, bass) decides WHICH notes play and builds a list of events { t, d, n (MIDI), gain, pan, accent, sus, decay, lv }.
+     A voice decides what they sound like. The stem's `voice` field picks it (a kit gives each role one):
+       pluck  triangle pluck with a sine octave     bell  FM bell      pad  detuned saws that swell      sub  sine bass (long notes swell, short ones pluck)
+       glide  Melody A: analog glide lead           acid  Melody B: TB-303-style line                      sample  a recorded note, repitched (stem.voiceSample)
+     pluck, bell, pad, sub and sample are polyphonic: every event is its own sound. glide and acid are mono: one oscillator per line, notes that
+     touch are joined by a slide. Gains in events are on the pluck scale; LEVEL maps them to each voice. */
+  const MONO_VOICES = new Set(['glide', 'acid']);
+  const VOICE_NAMES = ['pluck', 'bell', 'pad', 'sub', 'glide', 'acid', 'sample'];
+  const LEVEL = { pluck: 1, bell: 0.45, pad: 0.3, sub: 1, sample: 1 };
+  const MONO_GAIN = { glide: 0.1, acid: 0.075 }; /* the level of a mono line whose events have gain 0.3 */
+  const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
+  function sampleNote(ctx, dest, { t, d, n, gain, pan = 0, sample }) {
+    if (!sample || !sample.buf) return;
+    const rate = Math.pow(2, (n - (sample.root ?? 60)) / 12), natural = sample.buf.duration / rate;
+    const len = sample.loop ? Math.max(d, 0.2) : Math.min(natural, Math.max(d * 1.5, 1.2));
+    rec(ctx, t, Math.min(d, len), n);
+    const src = ctx.createBufferSource(); src.buffer = sample.buf; src.playbackRate.value = rate;
+    if (sample.loop) { src.loop = true; src.loopStart = 0; src.loopEnd = sample.buf.duration; }
+    const g = ctx.createGain(), peak = gain * (sample.gain ?? 1), rel = Math.min(0.4, len * 0.3), endT = t + len;
+    g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(peak, t + 0.004); g.gain.setValueAtTime(peak, Math.max(t + 0.01, endT - rel)); g.gain.linearRampToValueAtTime(0, endT);
+    const pn = ctx.createStereoPanner(); pn.pan.value = pan;
+    src.connect(g).connect(pn).connect(dest); src.start(t); src.stop(endT + 0.03);
+  }
+  /* The bus a voice plays into: dry, a reverb send, and a dotted-eighth echo (echo level 0 = none). */
+  function voiceBus(ctx, out, verb, m, { echo = 0.28, rv = 0.9, delay = 0.75, lp = 0 } = {}) {
+    const bus = ctx.createGain(); bus.connect(out); bus.connect(verb.in(rv));
+    if (echo > 0) {
+      const dly = ctx.createDelay(2); dly.delayTime.value = m.beat * delay;
+      const fb = ctx.createGain(); fb.gain.value = 0.3; const dg = ctx.createGain(); dg.gain.value = echo;
+      bus.connect(dg).connect(dly);
+      if (lp) { const f = ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = lp; dly.connect(f).connect(fb).connect(dly); f.connect(out); f.connect(verb.in(0.5)); }
+      else { dly.connect(fb).connect(dly); dly.connect(out); dly.connect(verb.in(0.5)); }
+    }
+    return bus;
+  }
+  /* One mono line: events -> phrases (notes that touch, or that carry join: true, are one phrase) -> one glide/acid voice per phrase. slow = notes of whole bars. */
+  function monoLine(ctx, dest, m, kind, evs, { gain, pan, slow = false, rnd }) {
+    const sorted = [...evs].sort((a, b) => a.t - b.t);
+    let prevEnd = -1e9;
+    const notes = sorted.map((e, i) => { const join = e.join !== undefined ? e.join : i > 0 && Math.abs(prevEnd - e.t) < 0.02; prevEnd = e.t + e.d; return { t: e.t, d: e.d, n: e.n, join, accent: !!e.accent }; });
+    for (const ph of phrasesOf(notes)) {
+      if (kind === 'acid') acidVoice(ctx, dest, { notes: ph, rnd, L: m.L, bar: m.bar, pan, gain, fast: !slow });
+      else glideLead(ctx, dest, { notes: ph, rnd, pan, gain, fast: !slow });
+    }
+  }
+  /* Plays events with a voice. o: { slow (mono lines of whole bars), rnd, pan/gain overrides for mono lines (by line name) } */
+  function playEvents(ctx, dest, m, voice, evs, o = {}) {
+    if (!evs.length) return;
+    if (MONO_VOICES.has(voice)) {
+      const lines = new Map(); for (const e of evs) { const k = e.line ?? e.lv ?? 0; if (!lines.has(k)) lines.set(k, []); lines.get(k).push(e); }
+      let i = 0;
+      for (const [k, list] of lines) {
+        const mean = list.reduce((a, e) => a + e.gain, 0) / list.length, spec = o.lines && o.lines[k] || {};
+        monoLine(ctx, dest, m, voice, list, { gain: spec.gain ?? MONO_GAIN[voice] * clamp(mean / 0.3, 0.25, 1.6), pan: spec.pan ?? (voice === 'glide' ? -0.2 : 0.25) * (i++ % 2 ? -1 : 1), slow: spec.slow ?? !!o.slow, rnd: o.rnd || m.rndT });
+      }
+      return;
+    }
+    for (const e of evs) {
+      const g = e.gain * (LEVEL[voice] ?? 1), pan = e.pan ?? 0, freq = mtof(e.n);
+      if (voice === 'bell') bell(ctx, dest, { t: e.t, freq, gain: g, decay: e.decay ? e.decay * 2.5 : clamp(e.d * 1.5, 1.6, 7), pan });
+      else if (voice === 'pad') padVoice(ctx, dest, { t: e.t, dur: Math.max(e.d, 0.3), xf: clamp(e.d * 0.3, 0.08, e.sus ? 1.2 : 0.6), freq, detune: 8, gain: g, pan });
+      else if (voice === 'sub') { if (e.sus) padVoice(ctx, dest, { t: e.t, dur: e.d, xf: 0.25, freq, types: ['sine', 'triangle'], detune: 2, gain: g, pan }); else pluck(ctx, dest, { t: e.t, freq, gain: g, decay: e.decay ?? clamp(e.d, 0.4, 3), type: 'sine', pan }); }
+      else if (voice === 'sample') sampleNote(ctx, dest, { t: e.t, d: e.d, n: e.n, gain: g, pan, sample: m.sample });
+      else pluck(ctx, dest, { t: e.t, freq, gain: g, decay: e.decay ?? (e.sus ? clamp(e.d, 0.6, 5) : clamp(e.d * 0.9, 0.4, 3)), type: e.type || 'triangle', pan });
+    }
+  }
+  /* A role's voice: the stem's own, else the role's default. A mono voice cannot play chords, so chords turn it into a pad. */
+  const voiceOf = (m, dflt, mono = true) => { const v = VOICE_NAMES.includes(m.voice) ? m.voice : dflt; return v === 'sample' && !(m.sample && m.sample.buf) ? dflt : !mono && MONO_VOICES.has(v) ? 'pad' : v; };
+
+  function longMelody(ctx, out, verb, m, voice = m.style) {
+    const acid = voice === 'acid', mono = MONO_VOICES.has(voice);
     const cfg = acid
       ? { lo: 46, hi: 65, lens: [2, 3, 4, 4, 6], rest: [1, 3.5], legato: 0.6, maxPhrase: 3, wander: 5, accent: 0.3 }
       : { lo: 55, hi: 74, lens: [3, 4, 4, 6, 8], rest: [0.5, 3], legato: 0.6, maxPhrase: 3, wander: 6, accent: 0 };
@@ -727,38 +804,39 @@
     bus.connect(dg).connect(dly); dly.connect(dlp).connect(fb).connect(dly); dlp.connect(out); dlp.connect(verb.in(0.5));
     /* Complexity: layer 0 is the plan above (a few long notes). Layer 1 adds a second, shorter line one octave higher in the
        gaps and over the long notes, planned with a stream of its own and kept a tone away from the long notes it sounds with.
-       Layer 2 adds a quiet plucked ornament line in the lyrical style on top. */
-    const voice = (notes, pan, gain) => { for (const ph of phrasesOf(notes)) { if (acid) acidVoice(ctx, bus, { notes: ph, rnd: m.rndT, L: m.L, bar: m.bar, pan, gain }); else glideLead(ctx, bus, { notes: ph, rnd: m.rndT, pan, gain }); } };
-    if (m.want(0)) { for (const ph of phrasesOf(planLongNotes(m, cfg))) { if (acid) acidVoice(ctx, bus, { notes: ph, rnd: m.rnd, L: m.L, bar: m.bar, pan: 0.25, gain: 0.075 }); else glideLead(ctx, bus, { notes: ph, rnd: m.rnd, pan: -0.2, gain: 0.1 }); } }
+       Layer 2 adds a quieter line of shorter notes on top, in the same voice. Every line is played by the stem's voice (glide for Melody A, acid for Melody B, or any other). */
+    const LINE = { a: acid ? { pan: 0.25, gain: 0.075 } : { pan: -0.2, gain: 0.1 }, b: acid ? { pan: -0.25, gain: 0.05 } : { pan: 0.25, gain: 0.065 } };
+    const play = (notes, line, rnd) => {
+      if (mono) { for (const ph of phrasesOf(notes)) { if (acid) acidVoice(ctx, bus, { notes: ph, rnd, L: m.L, bar: m.bar, pan: LINE[line].pan, gain: LINE[line].gain }); else glideLead(ctx, bus, { notes: ph, rnd, pan: LINE[line].pan, gain: LINE[line].gain }); } return; }
+      const a = line === 'a';
+      playEvents(ctx, bus, m, voice, notes.map((nt) => ({ t: nt.t, d: nt.d, n: nt.n, gain: a ? 0.2 : 0.13, pan: LINE[line].pan, sus: true, accent: nt.accent })), { slow: true });
+    };
+    if (m.want(0)) play(planLongNotes(m, cfg), 'a', m.rnd);
     if (m.tier === 1 || m.tier === null) {
       const saved = lastLongPlan, base = planLongNotes({ ...m, rnd: m.mkRnd() }, cfg); /* layer 0's notes, rebuilt from the same seed */
       const near = (n, a, b) => base.some((x) => x.t < b - 1e-6 && x.t + x.d > a + 1e-6 && [1, 11].includes((((n - x.n) % 12) + 12) % 12)); /* true = reject: a semitone from a long note that sounds with it */
       const cfg1 = { ...cfg, lo: cfg.lo + 12, hi: cfg.hi + 12, lens: [1, 2, 2, 3], rest: [0.5, 2], legato: 0.5, maxPhrase: 3, wander: 4, accent: 0.2, avoid: near };
       const n1 = planLongNotes({ ...m, rnd: m.rndT }, cfg1); lastLongPlan = saved;
-      voice(n1, acid ? -0.25 : 0.25, acid ? 0.05 : 0.065);
+      play(n1, 'b', m.rndT);
     }
-    /* A plucked line in the gaps, the same notes in every layer: its 12 strongest notes belong to layer 1 and the next 16 to layer 2.
+    /* A busier line in the gaps, the same notes in every layer: its 12 strongest notes belong to layer 1 and the next 16 to layer 2.
        With layer 0 (the long notes) and layer 1's second line, that is about 4 / 16 / 32 notes per 8 bars at the sparse / medium / complex settings. */
-    if (m.want(1) || m.want(2)) pluckedMelody(ctx, out, verb, { ...m, rnd: m.mkRnd() }, 'dense', 0.6, { n1: 12, n2: 16 });
+    if (m.want(1) || m.want(2)) pluckedMelody(ctx, out, verb, { ...m, rnd: m.mkRnd() }, 'dense', 0.6, { n1: 12, n2: 16 }, voice);
   }
 
-  /* The note-by-note melody (every style except glide and acid). Complexity: strong beats and phrase ends in layer 0, the other beats in layer 1, the off-beats in layer 2.
-     gainMul lets the long leads reuse it as a quiet ornament layer. */
-  function pluckedMelody(ctx, out, verb, m, styleKey, gainMul, ranked = null) {
-    // Four characters to choose from. pOn/pOff: chance of a note on a beat / off-beat; hold: extra chance after a long gap;
-    // step: how far each note may move (in scale steps); oct: octave shift; decay: ring time; echo: delay level.
-    const STYLES = { // ('glide' and 'acid' are handled by longMelody)
-      lyrical: { pOn: 0.30, pOff: 0.05, hold: 0.5, step: 3.2, oct: 0, type: 'triangle', decay: 1.0, echo: 0.28 },
-      flowing: { pOn: 0.65, pOff: 0.5, hold: 0.0, step: 3.0, oct: 0, type: 'triangle', decay: 0.5, echo: 0.2 },
-      leaping: { pOn: 0.42, pOff: 0.22, hold: 0.3, step: 8.0, oct: 0, type: 'triangle', decay: 0.7, echo: 0.3 },
-      bright: { pOn: 0.22, pOff: 0.05, hold: 0.6, step: 4.0, oct: 12, type: 'sine', decay: 1.8, echo: 0.4 },
-      dense: { pOn: 0.99, pOff: 0.4, hold: 0.0, step: 3.0, oct: 0, type: 'triangle', decay: 0.9, echo: 0.28 }, // a note on almost every beat; used only for the complexity layers of the long leads
-    };
-    const st = STYLES[styleKey] || { pOn: 0.38, pOff: 0.16, hold: 0.4, step: 4.4, oct: 0, type: 'triangle', decay: 0.8, echo: 0.28 };
-    const bus = ctx.createGain(); bus.connect(out); bus.connect(verb.in(0.9));
-    const dly = ctx.createDelay(1); dly.delayTime.value = m.beat * 0.75; // dotted-8th echo
-    const fb = ctx.createGain(); fb.gain.value = 0.3; const dg = ctx.createGain(); dg.gain.value = st.echo;
-    bus.connect(dg).connect(dly); dly.connect(fb).connect(dly); dly.connect(out); dly.connect(verb.in(0.5));
+  /* The note-by-note melody generator. Complexity: strong beats and phrase ends in layer 0, the other beats in layer 1, the off-beats in layer 2.
+     Four characters to choose from. pOn/pOff: chance of a note on a beat / off-beat; hold: extra chance after a long gap;
+     step: how far each note may move (in scale steps); oct: octave shift; decay: ring time; echo: delay level. */
+  const MEL_STYLES = {
+    lyrical: { pOn: 0.30, pOff: 0.05, hold: 0.5, step: 3.2, oct: 0, type: 'triangle', decay: 1.0, echo: 0.28 },
+    flowing: { pOn: 0.65, pOff: 0.5, hold: 0.0, step: 3.0, oct: 0, type: 'triangle', decay: 0.5, echo: 0.2 },
+    leaping: { pOn: 0.42, pOff: 0.22, hold: 0.3, step: 8.0, oct: 0, type: 'triangle', decay: 0.7, echo: 0.3 },
+    bright: { pOn: 0.22, pOff: 0.05, hold: 0.6, step: 4.0, oct: 12, type: 'sine', decay: 1.8, echo: 0.4 },
+    dense: { pOn: 0.99, pOff: 0.4, hold: 0.0, step: 3.0, oct: 0, type: 'triangle', decay: 0.9, echo: 0.28 }, // a note on almost every beat; used for the busier layers of the long leads
+  };
+  /* gainMul scales the level (the busier line of the long leads is quieter). `voice` plays the notes: pluck keeps the original sound, the others are listed above. */
+  function pluckedMelody(ctx, out, verb, m, styleKey, gainMul, ranked = null, voice = 'pluck') {
+    const st = MEL_STYLES[styleKey] || { pOn: 0.38, pOff: 0.16, hold: 0.4, step: 4.4, oct: 0, type: 'triangle', decay: 0.8, echo: 0.28 };
     const poolAll = [];
     const mb = m.custom ? 0 : 12; /* a chord chart plays the melody an octave lower */
     for (let o = 0; o < 3; o++) for (const d of m.scale) { const n = m.root + mb + o * 12 + d; if (n <= m.root + mb + 19) poolAll.push(n); }
@@ -786,13 +864,26 @@
         else if (strong || k === 0) n = nearest(n, (x) => isTone(x, chord));
         cur = n;
         const dur = ((onsets[k + 1] ?? slots) - s) * m.beat / 2, pan = (m.rnd() - 0.5) * 0.4;
-        evs.push({ lv, key: ranked ? m.rnd() : 0, first: strong || final ? 0 : 1, t: t0 + s * m.beat / 2, freq: mtof(n + st.oct), gain: (strong ? 0.32 : 0.25) * (st.oct ? 0.75 : 1) * gainMul, decay: Math.min(3, st.decay + dur), type: st.type, pan });
+        evs.push({ lv, key: ranked ? m.rnd() : 0, first: strong || final ? 0 : 1, strong, t: t0 + s * m.beat / 2, n: n + st.oct, dur, gain: (strong ? 0.32 : 0.25) * (st.oct ? 0.75 : 1) * gainMul, decay: Math.min(3, st.decay + dur), type: st.type, pan });
       });
     });
     if (ranked) { /* strong beats and phrase ends first, then the rest in a fixed random order: the first n1 are layer 1, the next n2 layer 2 */
       [...evs].sort((a, b) => a.first - b.first || a.key - b.key).forEach((e, k) => { e.lv = k < ranked.n1 ? 1 : k < ranked.n1 + ranked.n2 ? 2 : -1; });
     }
-    for (const e of evs) if (e.lv >= 0 && m.want(e.lv)) pluck(ctx, bus, { t: e.t, freq: e.freq, gain: e.gain, decay: e.decay, type: e.type, pan: e.pan });
+    const mine = evs.filter((e) => e.lv >= 0 && m.want(e.lv));
+    if (voice === 'pluck') { /* the original sound */
+      const bus = voiceBus(ctx, out, verb, m, { echo: st.echo, rv: 0.9, delay: 0.75 });
+      for (const e of mine) pluck(ctx, bus, { t: e.t, freq: mtof(e.n), gain: e.gain, decay: e.decay, type: e.type, pan: e.pan });
+      return;
+    }
+    const bus = voiceBus(ctx, out, verb, m, { echo: st.echo, rv: 0.9, delay: 0.75 });
+    const line0 = evs.filter((e) => e.lv === 0 && !ranked); /* the sparse line (layer 0): for a mono voice each note is held up to the next one, so the line is legato */
+    const events = mine.map((e) => {
+      let d = e.dur;
+      if (MONO_VOICES.has(voice)) { const nx = line0.find((x) => x.t > e.t + 1e-6); d = e.lv === 0 && !ranked ? Math.min(nx ? nx.t - e.t : m.L - e.t, m.bar * 2) : Math.min(e.dur, m.beat * 0.9); }
+      return { t: e.t, d, n: e.n, gain: e.gain, pan: e.pan, accent: e.strong, decay: e.decay, type: e.type, lv: e.lv, line: e.lv };
+    });
+    playEvents(ctx, bus, m, voice, events, { rnd: m.rndT, lines: ranked ? { 1: { gain: voice === 'acid' ? 0.04 : 0.05, pan: 0.3 }, 2: { gain: voice === 'acid' ? 0.035 : 0.04, pan: -0.3 } } : null });
   }
 
   // ---------- stems ----------
@@ -914,7 +1005,8 @@
           }
         }
       };
-      const si = strict || m.bpb !== 4 ? 0 : pickW(m.mkRnd()(), SUB_TPL.map((x) => x.w)), stpl = SUB_TPL[si]; m.tplName = strict ? 'Strict' : stpl.name;
+      const forcedS = m.tpl ? SUB_TPL.findIndex((x) => x.name === m.tpl) : -1; /* a rhythmic template names the groove; otherwise the seed picks one */
+      const si = strict || m.bpb !== 4 ? 0 : forcedS >= 0 ? forcedS : pickW(m.mkRnd()(), SUB_TPL.map((x) => x.w)), stpl = SUB_TPL[si]; m.tplName = strict ? 'Strict' : stpl.name;
       if (si > 0) { /* a rhythm template: the notes are the anchors (D / A) or chord tones in the Sub's own range that do not clash with the drone's pitches or the pad, atmos and arp notes of that chord */
         const root = m.root, ladder = m.plan.ladder || [root - 12, root - 5, root, root + 7], drone = m.plan.drone || [root - 12, root - 5, root];
         const pcOf = (n) => ((n % 12) + 12) % 12;
@@ -1041,7 +1133,8 @@
       // layer 2 adds the sixteenth-note shaker, the pick-up before the bar line and a ghost thump.
       const bus = ctx.createGain(); bus.connect(out); bus.connect(verb.in(0.15));
       const beats = Math.round(m.L / m.beat);
-      const ti = m.bpb === 4 ? pickW(m.mkRnd()(), PULSE_TPL.map((x) => x.w)) : 0, tpl = PULSE_TPL[ti]; m.tplName = tpl.name;
+      const forcedP = m.tpl ? PULSE_TPL.findIndex((x) => x.name === m.tpl) : -1;
+      const ti = m.bpb === 4 ? (forcedP >= 0 ? forcedP : pickW(m.mkRnd()(), PULSE_TPL.map((x) => x.w))) : 0, tpl = PULSE_TPL[ti]; m.tplName = tpl.name;
       if (ti > 0) { /* a rhythm template (4/4): the hits are the template's, the details (skipped shaker hits, pick-ups) are still drawn from the seed */
         const bars = Math.round(beats / 4);
         for (let bar = 0; bar < bars; bar++) {
@@ -1108,31 +1201,43 @@
 
     // ----- melody pack (I IV iii vi ii V I) -----
     mchords(ctx, out, verb, m) {
-      const f = ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 1800; f.Q.value = 0.9;
-      lfo(ctx, f.frequency, { L: m.L, cycles: 2, depth: 600 });
+      const voice = voiceOf(m, 'pad', false); /* chords are polyphonic: a mono voice becomes a pad */
+      const f = ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = voice === 'pad' ? 1800 : 6000; f.Q.value = 0.9;
+      if (voice === 'pad') lfo(ctx, f.frequency, { L: m.L, cycles: 2, depth: 600 });
       f.connect(out); f.connect(verb.in(0.8));
-      /* Complexity: layer 0 holds the chord's 1st and 3rd listed tones, layer 1 adds the 2nd, layer 2 the 4th (a fuller chord as X rises) */
+      /* Complexity: layer 0 holds the chord's 1st and 3rd listed tones, layer 1 adds the 2nd, layer 2 the 4th (a fuller chord as X rises).
+         A pad holds each chord for its whole length; the other voices strike it again on every bar line. */
+      const evs = [];
       m.forProg((chord, t, seg) => chord.slice(0, 4).forEach((n, i) => {
-        if (!m.want([0, 1, 0, 2][i])) return;
-        padVoice(ctx, f, { t, dur: seg, xf: 1.2, freq: mtof(m.root + n), detune: 8, gain: 0.05, pan: (i - 1.5) * 0.35 });
+        const lv = [0, 1, 0, 2][i]; if (!m.want(lv)) return;
+        const pan = (i - 1.5) * 0.35, base = { n: m.root + n, pan, lv, sus: true };
+        if (voice === 'pad') evs.push({ ...base, t, d: seg, gain: 0.05 / LEVEL.pad });
+        else for (let b = 0; b < Math.round(seg / m.bar); b++) evs.push({ ...base, t: t + b * m.bar, d: m.bar, gain: voice === 'bell' ? 0.09 / LEVEL.bell : 0.1 });
       }));
+      playEvents(ctx, f, m, voice, evs);
     },
 
     mbass(ctx, out, verb, m) {
+      const voice = voiceOf(m, 'sub');
+      const evs = [];
       m.forProg((chord, t, seg) => {
+        const n = m.root - 12 + chord[0];
         /* Complexity: layer 0 the long note, layer 1 a pluck on every bar, layer 2 a softer pluck on the middle of every bar */
-        if (m.want(0)) padVoice(ctx, out, { t, dur: seg, xf: 0.25, freq: mtof(m.root - 12 + chord[0]), types: ['sine', 'triangle'], detune: 2, gain: 0.14 });
+        if (m.want(0)) evs.push({ t, d: seg, n, gain: 0.14, sus: true, lv: 0, line: 0, join: undefined });
         for (let b = 0; b < Math.round(seg / m.bar); b++) {
-          if (m.want(1)) pluck(ctx, out, { t: t + b * m.bar, freq: mtof(m.root - 12 + chord[0]), gain: 0.12, decay: 1.4, type: 'sine' });
-          if (m.want(2)) pluck(ctx, out, { t: t + (b + 0.5) * m.bar, freq: mtof(m.root - 12 + chord[0]), gain: 0.08, decay: 1.0, type: 'sine' });
+          if (m.want(1)) evs.push({ t: t + b * m.bar, d: Math.min(m.bar, 1.4), n, gain: 0.12, decay: 1.4, lv: 1, line: 1 });
+          if (m.want(2)) evs.push({ t: t + (b + 0.5) * m.bar, d: Math.min(m.bar / 2, 1.0), n, gain: 0.08, decay: 1.0, lv: 2, line: 2 });
         }
       });
+      playEvents(ctx, out, m, voice, evs, { lines: { 0: { gain: voice === 'acid' ? 0.06 : 0.09, pan: 0, slow: true }, 1: { gain: voice === 'acid' ? 0.05 : 0.07, pan: 0 }, 2: { gain: voice === 'acid' ? 0.04 : 0.05, pan: 0 } } });
     },
 
     marp(ctx, out, verb, m) {
-      const bus = ctx.createGain(); bus.connect(out); bus.connect(verb.in(0.9));
+      const voice = voiceOf(m, 'pluck');
+      const bus = voice === 'pluck' ? (() => { const b = ctx.createGain(); b.connect(out); b.connect(verb.in(0.9)); return b; })() : voiceBus(ctx, out, verb, m, { echo: 0.15, rv: 0.9 });
       const PATS = { rolling: [0, 1, 2, 3, 4, 3, 2, 1], pulse: [0, 2, 0, 3, 0, 2, 0, 4] }; /* the stem's "style" picks the pattern (genre packs); steps past the chord's last tone wrap around */
       const pat = PATS[m.style] || [0, 2, 1, 3, 2, 4, 3, 1];
+      const evs = [];
       m.forProg((chord, t0, seg, ci) => {
         const steps = Math.round(seg / (m.beat / 2));
         for (let s = 0; s < steps; s++) {
@@ -1140,17 +1245,23 @@
           let note = m.root + 24 + tone - (tone > 12 ? 12 : 0);
           if (m.ambient) { note = m.plan.fit(note, ci); if (note === null) continue; } // follows the ambient stems: fits under the plan
           /* Complexity: layer 0 every other beat, layer 1 the beats in between, layer 2 the off-beat eighths */
-          if (!m.want(s % 4 === 0 ? 0 : s % 2 === 0 ? 1 : 2)) continue;
-          pluck(ctx, bus, { t: t0 + s * m.beat / 2, freq: mtof(note), gain: s % 4 === 0 ? 0.15 : 0.1, decay: 1.1, pan: Math.sin(s) * 0.5 });
+          const lv = s % 4 === 0 ? 0 : s % 2 === 0 ? 1 : 2;
+          if (!m.want(lv)) continue;
+          evs.push({ t: t0 + s * m.beat / 2, d: m.beat / 2, n: note, gain: s % 4 === 0 ? 0.15 : 0.1, decay: 1.1, pan: Math.sin(s) * 0.5, lv, line: 0 });
         }
       });
+      playEvents(ctx, bus, m, voice, evs, { lines: { 0: { gain: voice === 'acid' ? 0.04 : 0.05, pan: 0.2 } } });
     },
 
     // A seeded melody that follows the chords: chord tones on strong beats, stepwise motion
     // between them, each phrase leans toward the next chord, and the last phrase lands on the tonic.
     melody(ctx, out, verb, m) {
-      if (m.style === 'glide' || m.style === 'acid') return longMelody(ctx, out, verb, m); // Melody A / B of the Layers pack: long, sparse analog leads (see above)
-      return pluckedMelody(ctx, out, verb, m, m.style, 1);
+      /* Two parts: the generator (which notes) and the voice (what they sound like). style 'long' (or the old 'glide' / 'acid') = a few long notes per phrase;
+         lyrical / flowing / leaping / bright = note by note. The voice is the stem's `voice` (a kit gives Melody A and B theirs); the old styles glide and acid
+         imply their voice when none is given. Any generator can use any voice. */
+      const legacy = m.style === 'glide' || m.style === 'acid', voice = voiceOf(m, legacy ? m.style : 'pluck');
+      if (legacy || m.style === 'long') return longMelody(ctx, out, verb, m, voice);
+      return pluckedMelody(ctx, out, verb, m, m.style, 1, null, voice);
     },
 
     shimmer(ctx, out, verb, m) {
@@ -1274,6 +1385,7 @@
       },
       forChords(fn) { if (custom) { custom.chords.forEach((c, i) => fn(prog[i], c.start * bar, c.len * bar, i)); return; } const n = Math.max(1, Math.round(L / seg)); for (let i = 0; i < n; i++) fn(CHORDS[i % 4], i * seg, seg, i % 4); },
     };
+    m.voice = opts.voice || null; m.sample = opts.voiceSample || null; m.tpl = opts.tpl || null; /* the stem's voice (see playEvents), its recorded note, and a forced rhythm template (Pulse / Sub) */
     m.seed = seed; m.id = id; m.samples = opts.samples || {}; m.pattern = opts.pattern || null; /* beats: the decoded one-shots and the pack's patterns */
     build(ctx, out, verb, m);
 

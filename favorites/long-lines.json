@@ -1,0 +1,8 @@
+{
+  "name": "Long lines \u00b7 Layers",
+  "description": "The ambient long notes of Melody A (glide) and Melody B (acid), with Chords, Bass and Arp under them.",
+  "kit": "layers",
+  "melodic": "melody-long",
+  "rhythmic": "rhythmic-synth",
+  "order": 8
+}

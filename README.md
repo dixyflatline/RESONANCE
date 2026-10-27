@@ -265,26 +265,43 @@ While the engine renders a layer that has complexity, `synth.js` records every n
 
 ### Rhythm templates (Pulse and Sub)
 
-The seed of the Pulse and Sub stems picks a rhythm template, so **New variation** in their pad window changes the groove. Pulse: Heartbeat, Tresillo, Four on the floor, Half-time breath, Syncopated, Rolling toms. Sub: Long line, Root and chord tone, Syncopated bass, Slow breath, Octave bounce, Chord walk. Sub can play chord tones as well as D and A, kept clear of the drone's pitches and of the pad, atmos and arp notes. The harmony always follows the show seed (`planSeed`), so varying one instrument never changes the chords. The toast after a variation names the template.
+The seed of the Pulse and Sub stems picks a rhythm template (unless a rhythmic template pack names one with `"tpl"` on the stem: `rhythm-tresillo` and the other `rhythm-*` packs do), so **New variation** in their pad window changes the groove. Pulse: Heartbeat, Tresillo, Four on the floor, Half-time breath, Syncopated, Rolling toms. Sub: Long line, Root and chord tone, Syncopated bass, Slow breath, Octave bounce, Chord walk. Sub can play chord tones as well as D and A, kept clear of the drone's pitches and of the pad, atmos and arp notes. The harmony always follows the show seed (`planSeed`), so varying one instrument never changes the chords. The toast after a variation names the template.
 
 ### Genre melody packs
 
-Ten Melody packs, each with Prog chords, Prog bass, Prog arp and a Melody on one genre progression: **Ballad, Pop, Dance / House, Gospel, Jazz, Lo-fi / West Coast, R&B / Neo-soul, Soulful seventies, Boom-bap (dark minor)** and **Trap (dark)**. Load one with Kits… > Load these sounds > Melodic. Every chord is built from the notes of D minor (the same as F major), so the melody, chords and arp are diatonic and sit on the ambient Drone, Pad and Atmos. The progressions are typical of each genre, not copies of any product's presets. They are defined in `PROG_LIB` in `public/synth.js`, and a pack picks one with `"progression": "<key>"` on its stems; the arp's pattern (`rolling`, `pulse`) and the melody's character (`lyrical`, `flowing`, `leaping`, `bright`) come from each stem's `style`.
+Ten melodic templates, each with Chords, Bass, Arp, Melody A and Melody B on one genre progression: **Ballad, Pop, Dance / House, Gospel, Jazz, Lo-fi / West Coast, R&B / Neo-soul, Soulful seventies, Boom-bap (dark minor)** and **Trap (dark)**. Pick one as the Melodic template in **Kit · Templates…**. Every chord is built from the notes of D minor (the same as F major), so the melody, chords and arp are diatonic and sit on the ambient Drone, Pad and Atmos. The progressions are typical of each genre, not copies of any product's presets. They are defined in `PROG_LIB` in `public/synth.js`, and a pack picks one with `"progression": "<key>"` on its stems; the arp's pattern (`rolling`, `pulse`) and the melody's character (`lyrical`, `flowing`, `leaping`, `bright`) come from each stem's `style`. Melody A and Melody B use different characters; what they sound like is up to the kit.
 
-## Kits
+## Kit, templates, favorites
 
-A kit swaps the **Melodic** and **Rhythmic** sounds of the live pack while the show runs (`lib/kits.js`, files in `kits/`, panel: **Kits…** on the engine page).
+The melodic and rhythmic sounds of the live pack are chosen in three steps (panel: **Kit · Templates…** on the engine page; code in `lib/soundkits.js` and `lib/kits.js`):
+
+1. **Kit: the sound.** A kit gives each melodic role a voice: **Chords, Bass, Arp, Melody A, Melody B**. A voice is a synth voice (`pad`, `pluck`, `bell`, `sub`, `glide`, `acid`) or a recorded sample, repitched across the keyboard. Files in `soundkits/`.
+2. **Template: the notes.** The melodic template decides the progression and which notes each role plays (a melodic pack whose stems name their role with `"slot"`; the ten genre packs, `melody-progression`, `melody-ambient`, `melody-long` and `melodic-synth`). The rhythmic template is a rhythmic pack: Pulse and Sub with a chosen groove (`rhythm-tresillo`, `rhythm-floor`, `rhythm-halftime`, `rhythm-syncopated`, `rhythm-toms`, `rhythm-heartbeat`), the seed-picked `rhythmic-synth`, or the hand-drum patterns of `world-percussion`.
+3. **Favorite: a saved combination** of kit + melodic template + rhythmic template + both Microcosm boxes. Files in `favorites/` (older files in `kits/` still load).
+
+Any kit plays any template. Melody A is a *voice*, not a tune: with the Layers kit it is the analog glide lead, and the same lead plays a gospel melody, a house melody or the long ambient lines, with its extra complexity layers in the same sound. Melody B in the Layers kit is the acid line. Nothing from another synth is added on top. A role the kit does not name, and stems that have no `slot` (for example Bells and Shimmer), keep their own sound.
 
 ```json
-{ "name": "Tidal melodies", "description": "…", "melodic": "melody-ambient", "rhythmic": "rhythmic-synth",
-  "micro": { "b": { "preset": "haze", "on": true, "knobs": { "mix": 0.45 }, "src": ["Melody A · Lyrical"], "muteDry": false } } }
+// soundkits/layers.json
+{ "name": "Layers", "order": 1, "voices": { "chords": "pad", "bass": "sub", "arp": "pluck", "melodyA": "glide", "melodyB": "acid" } }
+
+// soundkits/keys-samples/kit.json: a kit with recordings (the files sit beside kit.json)
+{ "name": "Electric keys (samples)", "voices": {
+    "chords": { "voice": "sample", "file": "keys-c4.wav", "root": 60, "gain": 1.5 }, "bass": { "voice": "sample", "file": "bass-c2.wav", "root": 36 },
+    "arp": "pluck", "melodyA": { "voice": "sample", "file": "keys-c4.wav", "root": 60 }, "melodyB": "bell" } }
+
+// favorites/gospel-glide.json
+{ "name": "Gospel · glide lead", "kit": "layers", "melodic": "melody-gospel", "rhythmic": "rhythm-halftime",
+  "micro": { "b": { "preset": "haze", "on": true, "knobs": { "mix": 0.45 }, "src": ["Melody A"], "muteDry": false } } }
 ```
 
-- **Sound sets:** a plain pack's stems fill the group's slots in order, under the group's audience rules (complexity layers, fades, limits). A pack names the roles it can fill with `"sets": ["melodic"]` / `["rhythmic"]` in `pack.json`; otherwise it is guessed from a `melodic` / `rhythmic` group, or from its synths (arp, bells, shimmer, melody, marp, mchords, mbass = melodic; pulse, sub = rhythmic). A set does not fit when its recorded loops differ in tempo or beats per bar from the live pack, or its generated stems are in another mode (major vs minor); the panel shows why.
-- **Hand-over:** `{type:'kit', id}` (or `{type:'kit', melodic, rhythmic}`) over the engine socket or `POST /api/input` switches the group's stems off (they fade out as usual), blocks new taps on them (phones see "The sounds are changing…"), and applies the swap when the engine reports them silent, or after 45 s, or at once when no engine is connected. The server then publishes a new `config` with a bumped `pack.rev` and `pack.kit`; the engine rebuilds only the stems that changed (the others, including Core synth, keep playing) and the phones update their grids. Slot ids are kept in order, so the rest of the audience state is untouched; extra stems get new ids, spare slots disappear.
-- **Saving:** `{type:'kitSave', name, micro}` (engine, HTTP) writes `kits/<name>.json` with the live Melodic/Rhythmic picks and the Microcosm settings. `GET /api/kits` lists the kits, the available sets for each role and the current choice.
-- **Starter kits:** `layers-default`, `tidal-melodies` (the four melodies and arp through the long-tone box) and `glass-and-pulse`.
-- Kits need a pack with `melodic` and `rhythmic` groups, such as Layers.
+- **Voices:** the voices a role accepts are Chords: pad, pluck, bell, sample; Bass: sub, pluck, acid, glide, sample; Arp, Melody A and Melody B: pluck, bell, pad, glide, acid, sample. Polyphonic voices (pluck, bell, pad, sub, sample) play each note as its own sound; `glide` and `acid` are mono lines whose touching notes are joined by a slide. In a melody the sparse layer is a legato line and the busier layers add short notes in the same voice. A sample voice needs a folder kit: `root` is the MIDI note of the recording, `loop: true` sustains it by looping (for pad-like recordings), otherwise it plays as a one-shot. `node tools/make-sample-kit.js` writes the example kit.
+- **Generators:** a melody stem's `style` picks how notes are generated: `lyrical`, `flowing`, `leaping`, `bright` (note by note) or `long` (a few long notes per phrase, the old `glide` / `acid` styles, which also imply their voice when no kit is used). `voice` on a stem is set by the kit; a pack can also name a default.
+- **Sound sets:** a template's stems fill the group's slots in order, under the group's audience rules (complexity layers, fades, limits). A pack names the roles it can fill with `"sets": ["melodic"]` / `["rhythmic"]` in `pack.json`; otherwise it is guessed from a `melodic` / `rhythmic` group, or from its synths. A template does not fit when its recorded loops differ in tempo or beats per bar from the live pack, or its generated stems are in another mode; the panel shows why.
+- **Hand-over:** `{type:'kit', id}` (a favorite) or `{type:'kit', kit, melodic, rhythmic}` over the engine socket or `POST /api/input` switches the group's stems off (they fade out as usual), blocks new taps on them (phones see "The sounds are changing…"), and applies the swap when the engine reports them silent, or after 45 s, or at once when no engine is connected. The server then publishes a new `config` with a bumped `pack.rev` and `pack.kit`; the engine rebuilds only the stems that changed (the others, including Core synth, keep playing) and the phones update their grids. Slot ids are kept in order, so the rest of the audience state is untouched; extra stems get new ids, spare slots disappear. A kit with no melodic template chosen plays on the live pack's own template if it has slots, otherwise on `melodic-synth`.
+- **Saving:** `{type:'kitSave', name, micro}` (engine, HTTP) writes `favorites/<name>.json`. `{type:'soundKitSave', name, voices}` writes a kit from synth voices (the panel's *Make or change a kit*). `GET /api/kits` lists favorites, kits, the templates for each role and the current choice.
+- **Starter content:** kits `layers` (the original sounds), `glass`, `analog`, `pluck-garden`, `keys-samples`; favorites `layers-default`, `glass-and-pulse`, `world-pulse`, `gospel-glide`, `house-analog`, `lofi-keys`, `long-lines`; `kits/tidal-melodies.json` is an older-format favorite.
+- Favorites need a pack with `melodic` and `rhythmic` groups, such as Layers.
 
 ## Microcosm effect box
 
@@ -395,8 +412,10 @@ A sensor bridge (for example a Python HRV/EEG process) can POST these messages, 
 server.js          HTTP + WebSocket hub, state, input handling
 config.json        default pack, tempo, beats/bar, quantize, fade, key, seed
 lib/packs.js       pack discovery + validation
-lib/kits.js        kits: sound sets, composing the live pack, kit files
-kits/              saved kits (JSON, one per kit)
+lib/soundkits.js   sound kits: the voice of each melodic role
+lib/kits.js        favorites: templates, composing the live pack, favorite files
+soundkits/         kits (JSON, or a folder with kit.json and samples)
+favorites/         saved favorites (JSON, one per favorite); older ones in kits/ still load
 examples/          bb-trumpet-example.musicxml (a MusicXML chart to try)
 public/musicxml.js  MusicXML / .mxl chord-symbol reader
 tools/             list-packs.js (npm run packs), fetch-cc0-stems.js
@@ -415,7 +434,7 @@ Biosensors, per-client audio, auth, cloud hosting and recording. The visual laye
 
 ### World percussion
 
-`packs/world-percussion` replaces Pulse and Sub with darbuka, congas and bongos, frame drum and deep drums, played by the `beats` pattern engine (see `packs/README.md`). Load it from the Kits panel, or use the starter kit `kits/world-pulse.json`. Samples are CC0 (VCSL, Karoryfer, Fugue State Audio, Stargate pack); credits are in the pack's `pack.json`.
+`packs/world-percussion` replaces Pulse and Sub with darbuka, congas and bongos, frame drum and deep drums, played by the `beats` pattern engine (see `packs/README.md`). Choose it as the Rhythmic template in the Kit · Templates panel, or use the favorite `favorites/world-pulse.json`. Samples are CC0 (VCSL, Karoryfer, Fugue State Audio, Stargate pack); credits are in the pack's `pack.json`.
 
 ### Live input
 

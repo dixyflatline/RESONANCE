@@ -1,6 +1,7 @@
 {
   "name": "World pulse",
   "description": "The melodic synths with hand drums (darbuka, congas and bongos, frame drum, deep drums) in place of Pulse and Sub.",
+  "kit": "layers",
   "melodic": "melodic-synth",
   "rhythmic": "world-percussion",
   "order": 4

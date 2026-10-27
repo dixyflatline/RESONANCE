@@ -1,6 +1,6 @@
 {
   "name": "Melody · 1-4-3-6-2-5-1 (major)",
-  "description": "The same generated melody and progression in a major key: I – IV – iii – vi – ii – V – I, 1–2 bars per chord (8-bar loop: I gets 2 bars, every other chord 1 bar, so it lines up with the other 8-bar packs).",
+  "description": "The same generated melody and progression in a major key: I – IV – iii – vi – ii – V – I, 1–2 bars per chord (8-bar loop: I gets 2 bars, every other chord 1 bar, so it lines up with the other 8-bar packs). A melodic template: pick a Kit to give Chords, Bass, Arp and Melody A / B their sounds.",
   "tempo": 50,
   "beatsPerBar": 4,
   "key": "D",
@@ -13,37 +13,54 @@
   "order": 17,
   "stems": [
     {
-      "name": "Prog chords",
+      "name": "Chords",
       "role": "harmony",
       "synth": "mchords",
+      "slot": "chords",
       "bars": 8,
       "gain": 0.7,
       "color": "#8b6cf0"
     },
     {
-      "name": "Prog bass",
+      "name": "Bass",
       "role": "bass",
       "synth": "mbass",
+      "slot": "bass",
       "bars": 8,
       "gain": 0.75,
       "color": "#2fb5a3"
     },
     {
-      "name": "Prog arp",
+      "name": "Arp",
       "role": "arpeggio",
       "synth": "marp",
+      "slot": "arp",
       "bars": 8,
       "gain": 0.6,
       "color": "#e8a33d"
     },
     {
-      "name": "Melody",
+      "name": "Melody A",
       "role": "lead",
       "synth": "melody",
+      "slot": "melodyA",
       "bars": 8,
       "gain": 0.8,
       "color": "#e0655a"
+    },
+    {
+      "name": "Melody B",
+      "role": "second lead",
+      "synth": "melody",
+      "slot": "melodyB",
+      "bars": 8,
+      "gain": 0.8,
+      "color": "#e58fb0",
+      "style": "lyrical"
     }
   ],
-  "mode": "major"
+  "mode": "major",
+  "sets": [
+    "melodic"
+  ]
 }

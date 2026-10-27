@@ -1,6 +1,7 @@
 {
   "name": "Layers default",
   "description": "The Melodic synth and Rhythmic synth the Layers pack comes with, with the effects off.",
+  "kit": "layers",
   "melodic": "melodic-synth",
   "rhythmic": "rhythmic-synth",
   "order": 1

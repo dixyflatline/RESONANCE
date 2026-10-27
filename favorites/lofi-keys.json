@@ -1,0 +1,8 @@
+{
+  "name": "Lo-fi \u00b7 electric keys",
+  "description": "Lo-fi / West Coast chords on recorded electric-piano notes with a tresillo groove.",
+  "kit": "keys-samples",
+  "melodic": "melody-lofi",
+  "rhythmic": "rhythm-tresillo",
+  "order": 7
+}

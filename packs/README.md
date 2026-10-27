@@ -41,7 +41,10 @@ Add a `pack.json` to set names, roles, colours and levels:
 |---|---|
 | `tempo`, `beatsPerBar` | The pack's master clock. Every loop in a pack must match it. |
 | `key` | Shown on the card. Use `null` for key-less material (field recordings, drones). |
-| `sets` | Optional. `["melodic"]` and/or `["rhythmic"]`: the roles this pack's stems can fill in a **kit** (otherwise guessed from its groups and synths). See README, "Kits". |
+| `sets` | Optional. `["melodic"]` and/or `["rhythmic"]`: the roles this pack's stems can fill in a **kit** (otherwise guessed from its groups and synths). See README, "Kit, templates, favorites". |
+| `slot` (on a stem) | Optional. `chords`, `bass`, `arp`, `melodyA` or `melodyB`: the role this generated stem plays. A sound kit gives stems that name a slot their `voice` (see README); the stem's own `voice` is the default. A pack whose stems have slots is a **melodic template**. |
+| `voice` (on a stem) | Optional. `pad`, `pluck`, `bell`, `sub`, `glide`, `acid` or `sample` (kits set it, with `voiceUrl`, `voiceRoot`, `voiceGain`, `voiceLoop` for samples). The generator (`style`) decides which notes play; the voice decides the sound. A melody `style` of `long` makes a few long notes per phrase. |
+| `tpl` (on a Pulse or Sub stem) | Optional. Names the rhythm template to play instead of letting the seed pick one: Pulse `Heartbeat`, `Tresillo`, `Four on the floor`, `Half-time breath`, `Syncopated`, `Rolling toms`; Sub `Long line`, `Root and chord tone`, `Syncopated bass`, `Slow breath`, `Octave bounce`, `Chord walk`. The `rhythm-*` packs are rhythmic templates. |
 | `order` | Sort position in the list (lower first). |
 | stem `file` | A WAV (checked for length) or mp3/ogg/flac/m4a (not checked), relative to the pack folder. |
 | stem `synth` | Instead of a file: `drone`, `pad`, `sub`, `arp`, `texture`, `pulse`, `bells`, `shimmer`, `atmos` (minor progression), or `mchords`, `mbass`, `marp`, `melody` (progression 1–4–3–6–2–5–1, or the ambient stems' chords when the stem has `"progression": "ambient"`, in the pack's `"mode"`: `"minor"` (default) or `"major"`; 8 bars gives chords of 2,1,1,1,1,1,1 bars; 14 gives 2 bars each), generated in the browser. |

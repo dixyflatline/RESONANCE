@@ -1,0 +1,12 @@
+{
+  "name": "Glass",
+  "description": "Bells and plucks: a pad under bell arp and bell melody, a plucked second melody.",
+  "order": 2,
+  "voices": {
+    "chords": "pad",
+    "bass": "sub",
+    "arp": "bell",
+    "melodyA": "bell",
+    "melodyB": "pluck"
+  }
+}

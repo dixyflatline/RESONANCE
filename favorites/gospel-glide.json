@@ -1,0 +1,8 @@
+{
+  "name": "Gospel \u00b7 glide lead",
+  "description": "Gospel progression played by the Layers kit: a pad under a glide-lead Melody A and an acid Melody B.",
+  "kit": "layers",
+  "melodic": "melody-gospel",
+  "rhythmic": "rhythm-halftime",
+  "order": 5
+}

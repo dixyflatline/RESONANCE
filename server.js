@@ -11,6 +11,7 @@ const { WebSocketServer } = require('ws');
 const { scanPacks, summary, publicGroup } = require('./lib/packs');
 const { Sim } = require('./lib/sim');
 const Kits = require('./lib/kits');
+const Sound = require('./lib/soundkits');
 
 const PORT = Number(process.env.PORT) || 8080;
 // When deployed publicly, set ENGINE_KEY so only you can run the audio engine or send
@@ -35,7 +36,9 @@ function buildId() {
 const ROOT = __dirname;
 const CONFIG_PATH = path.join(ROOT, 'config.json');
 const PACKS_DIR = path.join(ROOT, 'packs');
-const KITS_DIR = path.join(ROOT, 'kits');
+const KITS_DIR = path.join(ROOT, 'kits'); // older favorites (read, and removed from here too)
+const FAV_DIR = path.join(ROOT, 'favorites'); // favorites are saved here
+const SOUNDKITS_DIR = path.join(ROOT, 'soundkits'); // sound kits: the voice of each melodic role (lib/soundkits.js)
 
 // config.json: global settings (default pack, quantize, fades) + fallback tempo/key for packs that don't set their own.
 function loadConfig() { return JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8')); }
@@ -57,7 +60,7 @@ if (!active) {
 // `active` is the live pack. When a kit swaps the Melodic / Rhythmic sounds, `active` becomes a copy of `activeBase` (the pack chosen in the pack browser)
 // with those groups' stems replaced; core synth and the nature samples are untouched and keep playing. The swap waits until the groups it changes are silent.
 let activeBase = active, activeKit = null, activePicks = {}, kitRev = 0;
-let kitPending = null; // { kit, picks, roles, since }: the swapped groups are fading out; the new sounds go in once they are silent
+let kitPending = null; // { kit, picks, roles, since, soundKit }: the swapped groups are fading out; the new sounds go in once they are silent
 
 // ---- State ---------------------------------------------------------------
 const state = {
@@ -229,6 +232,10 @@ const server = http.createServer((req, res) => {
     });
     return;
   }
+  if (p.startsWith('/soundkits/')) {
+    const f = safeJoin(SOUNDKITS_DIR, p.slice('/soundkits/'.length));
+    return f ? sendFile(res, f) : (res.writeHead(403), res.end());
+  }
   if (p.startsWith('/packs/')) {
     const f = safeJoin(PACKS_DIR, p.slice('/packs/'.length));
     return f ? sendFile(res, f) : (res.writeHead(403), res.end());
@@ -296,23 +303,28 @@ function setActive(next, source) {
 // ---- Kit swap ----
 const kitGroupIds = (roles) => (activeBase.stems || []).concat(active.stems).filter((s) => roles.includes(s.group)).map((s) => s.id);
 const kitBlocked = (id) => !!(kitPending && active.stems.some((s) => s.id === id && kitPending.roles.includes(s.group)));
-function kitList() { return Kits.scanKits(KITS_DIR); }
+function kitList() { return Kits.scanKits([FAV_DIR, KITS_DIR]); }
+const soundKitList = () => Sound.scanSoundKits(SOUNDKITS_DIR);
 function kitInfo() {
   rescan();
   const cat = Kits.catalog(activeBase, packList, activePicks);
-  return { canKit: cat.canKit, roles: cat.roles, kits: kitList(), current: { kit: activeKit && activeKit.id, picks: activePicks }, pending: kitPending ? { name: kitPending.kit.name, roles: kitPending.roles } : null, base: activeBase.id };
+  return { canKit: cat.canKit, roles: cat.roles, kits: kitList(), soundKits: soundKitList().map(Sound.publicSoundKit), slots: Sound.SLOTS.map((id) => ({ id, name: Sound.SLOT_NAMES[id], voices: Sound.ALLOWED[id].map((v) => ({ id: v, name: Sound.VOICE_NAMES[v] })) })), current: { kit: activeKit && activeKit.id, picks: activePicks }, pending: kitPending ? { name: kitPending.kit.name, roles: kitPending.roles } : null, base: activeBase.id };
 }
-/** Ask for a kit: { id } (a saved kit) or { melodic, rhythmic, name?, micro? } (picks). The groups that change fade out first. */
+/** Ask for sounds: { id } (a favorite) or { kit?, melodic, rhythmic, name?, micro? } (a sound kit, a melodic and a rhythmic template). The groups that change fade out first. */
 function requestKit(msg, source) {
   let kit = null;
   if (msg.id) { kit = kitList().find((k) => k.id === String(msg.id)); if (!kit) return log(`kit "${msg.id}" not found`); }
-  else kit = { id: null, name: String(msg.name || 'Custom sounds').slice(0, 60), melodic: msg.melodic ? String(msg.melodic) : null, rhythmic: msg.rhythmic ? String(msg.rhythmic) : null, micro: Kits.cleanMicro(msg.micro) };
-  const picks = {}; for (const r of Kits.ROLES) if (kit[r]) picks[r] = kit[r]; // a role the kit does not name goes back to the live pack's own sounds
-  const r = Kits.compose(activeBase, picks, packList, {});
+  else kit = { id: null, name: String(msg.name || 'Custom sounds').slice(0, 60), kit: msg.kit ? String(msg.kit) : null, melodic: msg.melodic ? String(msg.melodic) : null, rhythmic: msg.rhythmic ? String(msg.rhythmic) : null, micro: Kits.cleanMicro(msg.micro) };
+  const picks = {}; for (const r of Kits.ROLES) if (kit[r]) picks[r] = kit[r]; // a role the favorite does not name goes back to the live pack's own sounds
+  const soundKit = kit.kit ? soundKitList().find((k) => k.id === kit.kit) || null : null;
+  if (kit.kit && !soundKit) log(`kit "${kit.kit}" not found in soundkits/: the template keeps its own sounds`);
+  if (soundKit && !picks.melodic) { const own = activeBase.stems.filter((s) => s.group === 'melodic'); if (own.some((s) => s.slot)) picks.melodic = activeBase.id; else if (packList.some((p) => p.id === 'melodic-synth')) picks.melodic = 'melodic-synth'; } // a kit needs a template to play: the live pack's own, else the Melodic synth
+  if (soundKit) picks.kit = soundKit.id;
+  const r = Kits.compose(activeBase, picks, packList, {}, soundKit);
   if (r.error) { log(`kit "${kit.name}" refused: ${r.error}`); toMonitors({ type: 'act', t: Date.now(), kind: 'kit-refused', who: source, source, reason: r.error }); return; }
-  const same = (role) => (picks[role] || null) === (activePicks[role] || null);
+  const same = (role) => (picks[role] || null) === (activePicks[role] || null) && (role !== 'melodic' || (picks.kit || null) === (activePicks.kit || null)); /* (a new sound kit changes the melodic voices) */
   const roles = Kits.ROLES.filter((role) => !same(role));
-  kitPending = { kit, picks, roles, since: Date.now() };
+  kitPending = { kit, picks, roles, since: Date.now(), soundKit };
   log(`${source} kit -> ${kit.name}${roles.length ? ` (fading out ${roles.join(' + ')} first)` : ''}`);
   for (const id of kitGroupIds(roles)) switchOff(id, 'kit change');
   broadcastState(); checkKit();
@@ -325,13 +337,13 @@ function checkKit() {
   if (silent || !engineUp || Date.now() - kitPending.since > 45000) applyKit();
 }
 function applyKit() {
-  const { kit, picks, roles } = kitPending; kitPending = null;
-  const r = Kits.compose(activeBase, picks, packList, {});
+  const { kit, picks, roles, soundKit } = kitPending; kitPending = null;
+  const r = Kits.compose(activeBase, picks, packList, {}, soundKit);
   if (r.error) { log(`kit "${kit.name}" failed: ${r.error}`); broadcastState(); return; }
   const gone = kitGroupIds(roles);
   for (const id of gone) { state.active.delete(id); state.playing.delete(id); delete state.xy[id]; notesCache.delete(id); startedAt.delete(id); lastChange.delete(id); pendingTaps.delete(id); clearTimeout(decayTimers.get(id)); decayTimers.delete(id); plays.delete(id); }
   active = r.pack; activePicks = picks; activeKit = kit.id ? kit : { id: null, name: kit.name, micro: kit.micro }; kitRev++;
-  log(`kit "${kit.name}" is live (${roles.length ? roles.map((x) => `${x}: ${picks[x] || 'default'}`).join(', ') : 'sounds unchanged'})`);
+  log(`kit "${kit.name}" is live (${roles.length ? roles.map((x) => `${x}: ${picks[x] || 'default'}${x === 'melodic' && picks.kit ? ` with kit ${picks.kit}` : ''}`).join(', ') : 'sounds unchanged'})`);
   broadcast({ type: 'config', ...publicConfig() });
   broadcastState();
 }
@@ -350,16 +362,27 @@ function handleInput(msg, source, sender) {
     case 'kit': if (source !== 'client') requestKit(msg, source); return; // load a kit (engine / sensor / HTTP only)
     case 'kitSave': { // save what is live as a kit file (engine / HTTP only)
       if (source === 'client') return;
-      const k = Kits.saveKit(KITS_DIR, { name: msg.name, description: msg.description, melodic: activePicks.melodic, rhythmic: activePicks.rhythmic, micro: msg.micro });
-      if (k) { log(`${source} saved kit "${k.name}"`); activeKit = { id: k.id, name: k.name, micro: k.micro }; broadcast({ type: 'config', ...publicConfig() }); }
+      const k = Kits.saveKit(FAV_DIR, { name: msg.name, description: msg.description, kit: activePicks.kit, melodic: activePicks.melodic, rhythmic: activePicks.rhythmic, micro: msg.micro });
+      if (k) { log(`${source} saved favorite "${k.name}"`); activeKit = { id: k.id, name: k.name, micro: k.micro }; broadcast({ type: 'config', ...publicConfig() }); }
       return;
     }
     case 'kitDelete': { // remove a saved kit file (engine / HTTP only); the sounds that are live stay as they are
       if (source === 'client') return;
-      if (Kits.deleteKit(KITS_DIR, msg.id)) {
-        log(`${source} removed kit "${msg.id}"`);
+      if (Kits.deleteKit([FAV_DIR, KITS_DIR], msg.id)) {
+        log(`${source} removed favorite "${msg.id}"`);
         if (activeKit && activeKit.id === msg.id) { activeKit = { id: null, name: activeKit.name, micro: null }; broadcast({ type: 'config', ...publicConfig() }); }
       }
+      return;
+    }
+    case 'soundKitSave': { // make or change a sound kit from plain synth voices (engine / HTTP only)
+      if (source === 'client') return;
+      const k = Sound.saveSoundKit(SOUNDKITS_DIR, { name: msg.name, description: msg.description, voices: msg.voices });
+      if (k) log(`${source} saved sound kit "${k.name}"`);
+      return;
+    }
+    case 'soundKitDelete': { // remove a sound kit that is a single file (engine / HTTP only)
+      if (source === 'client') return;
+      if (Sound.deleteSoundKit(SOUNDKITS_DIR, msg.id)) log(`${source} removed sound kit "${msg.id}"`);
       return;
     }
     case 'toggle': {

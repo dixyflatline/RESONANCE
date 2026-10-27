@@ -33,7 +33,7 @@ Stems sit in **groups** (for example Melodic and Rhythmic), and each group carri
 
 **Complexity layers.** A generated stem is rendered as three loops of the same length, from sparse to busy. The pad's X axis fades between them, so one pad moves from simple to rich. Recorded files ignore X.
 
-**Genre melody packs.** Ten Melody packs (Ballad, Pop, Dance / House, Gospel, Jazz, Lo-fi, R&B / Neo-soul, Soulful seventies, Boom-bap, Trap) each play a genre progression with chords, bass, arp and a generated melody. All chords use only the notes of D minor (= F major), so everything stays diatonic and fits the ambient stems. They are loaded as the Melodic sound set of a kit.
+**Genre melody packs.** Ten Melody packs (Ballad, Pop, Dance / House, Gospel, Jazz, Lo-fi, R&B / Neo-soul, Soulful seventies, Boom-bap, Trap) each play a genre progression with chords, bass, arp and a generated melody. All chords use only the notes of D minor (= F major), so everything stays diatonic and fits the ambient stems. They are melodic templates: chosen as the Melodic template in the Kit · Templates panel, and played in whatever kit is loaded.
 
 **Rhythm templates (Pulse and Sub).** Each of these two instruments has several rhythm templates, and the stem's seed picks one, so pressing New variation on its pad changes the groove. Pulse has Heartbeat (the original), Tresillo, Four on the floor, Half-time breath, Syncopated and Rolling toms. Sub has Long line (the original), Root and chord tone, Syncopated bass, Slow breath, Octave bounce and Chord walk. Sub may now play chord tones as well as D and A, but only low notes that stay clear of the drone's pitches and of the pad, atmos and arp notes of that chord. The chord progression itself always comes from the show seed, so a single instrument's variation never changes the harmony.
 
@@ -51,21 +51,27 @@ There are **two boxes**. Box A (arps, plucks and percussion) holds the presets t
 
 **Live input.** The first row of the instrument list is Live input. Click it to start the Mac's microphone, 3.5 mm input or an audio interface. Its A and B buttons work like any instrument's; the gear opens the device list, the level and meter, *Hear the dry input too* (off by default, so only the effect is heard) and *Clean up* (echo cancellation and noise reduction, off by default because it dulls instruments). Use headphones with the built-in microphone, and open the engine page as `http://localhost:…` so the browser allows the microphone.
 
-Both boxes start On; with no source chosen they do nothing. Settings are remembered per browser. A kit can carry effect settings too (see Kits).
+Both boxes start On; with no source chosen they do nothing. Settings are remembered per browser. A favorite can carry effect settings too (see below).
 
-## Kits: changing sounds during a show
+## Kit, templates and favorites: changing sounds during a show
 
-A **kit** is a curated, saved choice of one Melodic sound set and one Rhythmic sound set, plus optional Microcosm settings. Loading a kit swaps those two groups while the rest of the show (the core synth, nature recordings) keeps playing. A **sound set** is an ordinary pack that offers a melodic or rhythmic group; the pack's `pack.json` can say which.
+The sound of the melodic and rhythmic groups is chosen in three steps:
 
-A swap is gentle, not abrupt:
+1. **Kit: the sound.** A kit gives each melodic role (Chords, Bass, Arp, Melody A, Melody B) a *voice*: a synth voice (pad, pluck, bell, sub, glide lead, acid line) or a recorded sample repitched across the keyboard. Melody A is therefore a sound, not a tune: with the Layers kit it is the glide lead, Melody B the acid line.
+2. **Template: the notes.** A melodic template (a melodic pack with stems that name their role) decides the chord progression and, for each role, how notes are generated: arp pattern, melody character (lyrical, flowing, leaping, bright, or a few long notes). A rhythmic template is a rhythmic pack (a Pulse and Sub groove, or the hand-drum patterns).
+3. **Favorite: a saved combination** of a kit, both templates and the Microcosm settings.
+
+Generation and sound are separate in the engine: each builder in `public/synth.js` produces a list of note events with the complexity layer each belongs to, and a voice plays them (`playEvents`). Any voice plays any generator, so a kit never adds notes from another synth: layer 0 of a melody is a sparse legato line and layers 1 and 2 add short notes in the same voice. The pad's X axis still fades the layers in and out, and the piano roll shows the notes.
+
+Loading swaps the two groups while the rest of the show (the core synth, nature recordings) keeps playing. A swap is gentle, not abrupt:
 
 1. The server fades out the stems of the groups being replaced. Taps on those stems are blocked, and phones show "The sounds are changing…".
-2. When those groups are silent, or after at most 45 seconds, the new sounds are applied and the server sends the new configuration.
-3. The engine builds only the stems that changed, applies the kit's effect settings and shows "live" when done. Phones clear their pads for the changed instruments.
+2. When those groups are silent, or after at most 45 seconds, the new sounds are applied and the server sends the new configuration. (Changing only the kit still re-renders the melodic stems, because their voices change.)
+3. The engine builds only the stems that changed, applies the favorite's effect settings and shows "live" when done. Phones clear their pads for the changed instruments.
 
-A kit is refused if it doesn't fit: recorded files must match the pack's tempo and beats per bar, and generated stems must share its mode. A key mismatch only warns.
+A template is refused if it doesn't fit: recorded files must match the pack's tempo and beats per bar, and generated stems must share its mode. A key mismatch only warns.
 
-The **Kits…** button in the effect panel opens the library. Each kit has Load and Remove (two clicks) buttons. *Load these sounds* picks a melodic and a rhythmic set directly, and *Save kit* stores the current choice, with the Microcosm settings, under a name in `kits/`. Starter kits are Layers default, Tidal melodies, Glass and pulse, and World pulse (the hand drums).
+The **Kit · Templates…** button in the effect panel opens one window with the three steps. *Make or change a kit* builds a kit from synth voices; kits with recordings are folders in `soundkits/` with a `kit.json`. *Load kit + templates* applies a choice directly, and *Save favorite* stores it, with the Microcosm settings, under a name in `favorites/`. Starter kits: Layers (the original sounds), Glass, Analog, Pluck garden and Electric keys (samples). Starter favorites include Layers default, Glass and pulse, World pulse, Gospel · glide lead, House · analog, Lo-fi · electric keys and Long lines. Older favorite files in `kits/` still load.
 
 Generated sounds take time to render after a swap (about 37 seconds in the slower test sandbox; expect less on a Mac), during which the new group is silent.
 
@@ -79,26 +85,28 @@ Generated sounds take time to render after a swap (about 37 seconds in the slowe
 2. Open the menu for the QR code and join link, and let the audience in.
 3. Switch instruments on from the left panel, or let phones do it. Set tempo, key, chord source, fades and master volume in the same panel.
 4. Shape the sound with Microcosm: choose a preset in each box, send instruments (or the live input) to A and/or B with the buttons beside them, and turn the box On.
-5. Change the palette mid-show with **Kits…**: load a kit and the Melodic and Rhythmic groups fade, swap and return.
+5. Change the palette mid-show with **Kit · Templates…**: load a favorite (or a kit with templates) and the Melodic and Rhythmic groups fade, swap and return.
 6. **New variation** sits in each instrument's pad window and renders a new version of that instrument only. **Stop all** fades the layers out in order, colour first and drone last.
 
 Only one engine page plays: the page that pressed Start becomes the engine, and others stay in standby.
 
 **The audience.** Scan the QR code, or open the address shown on the engine page with `http://`, not `https://`. Tapping an instrument opens its pad: left and right set the complexity, up and down the filter, and the fader the volume. The On/Off button inside the pad starts or stops it on the next beat. Some layers are shared on purpose: nature sounds need two people at once, and the Gong, which ends the show, needs three people within 20 seconds.
 
-**Adding sounds.** Drop a pack folder into `packs/` (audio files, or a `pack.json` describing synths or pattern drums) and press Rescan in the pack list or Kits panel. Save a combination you like as a kit.
+**Adding sounds.** Drop a pack folder into `packs/` (audio files, or a `pack.json` describing synths or pattern drums) and press Rescan in the pack list or Kits panel. Save a combination you like as a favorite. Add a sound kit as a JSON file (or a folder with samples) in `soundkits/`.
 
 ## Performance, limits and known gaps
 
 **Load.** Everything is computed on the engine machine; phones only send small messages. The main cost is the engine's audio thread: each Microcosm box is a granular worklet, and generated stems add decode and render work at load. Offline measurements in a test sandbox, which is slower than a Mac, were used as an upper bound, and nothing has been measured on the show hardware yet.
 
-**Not yet verified by ear.** The headless tests cover routing, kit swaps, rendering, levels and the live input signal path. Nothing has been auditioned on the real Mac and phones, including the hand-drum patterns and the live input with a real microphone.
+**Not yet verified by ear.** The headless tests cover routing, kit swaps, rendering, levels, every voice on every generator, and the live input signal path. Nothing has been auditioned on the real Mac and phones, including the hand-drum patterns and the live input with a real microphone.
 
 **Known gaps.**
 
 - After a kit swap the new group is silent until its stems finish rendering. Pre-rendering the next kit during the fade-out would hide this; it is not built.
 - A Microcosm box has no bypass when it is off, so the box's own path is always in the graph.
-- Kits do not store the live input settings.
+- Favorites do not store the live input settings.
+- Rhythmic roles are not part of the kit: the kit covers Chords, Bass, Arp, Melody A and Melody B. The rhythmic template picks the groove, and the Pulse and Sub sounds themselves are fixed (the hand-drum pack brings its own recordings).
+- Bells, Shimmer and Melody C/D in older packs have no role slot, so a kit does not change their sound.
 - The hand-drum pack credits its CC0 sources in `pack.json`, but there is no separate Stargate licence file yet.
 
 ## Repository map
@@ -111,8 +119,10 @@ Only one engine page plays: the page that pressed Start becomes the engine, and 
 | `public/synth.js` | Generated instruments, complexity layers, the `beats` pattern player |
 | `public/microcosm.js` | The granular effect (AudioWorklet) and its presets |
 | `lib/packs.js` | Pack scanning and validation |
-| `lib/kits.js` | Kit rules: roles, fit checks, compose, save, delete |
+| `lib/soundkits.js` | Sound kits: voices per role, scan, save, apply to stems |
+| `lib/kits.js` | Favorites and templates: roles, fit checks, compose, save, delete |
 | `packs/` | Packs, including `world-percussion/` with its samples |
-| `kits/` | Saved kits (JSON) |
+| `soundkits/` | Kits: JSON, or a folder with `kit.json` and samples |
+| `favorites/` | Saved favorites (JSON); older ones in `kits/` still load |
 | `README.md`, `MANUAL.md`, `packs/README.md` | Full reference docs |
 | `docs/DESIGN.md` | This document |

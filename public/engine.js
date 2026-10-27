@@ -599,8 +599,9 @@
           buf = await ctx.decodeAudioData(await res.arrayBuffer());
         } else {
           const samples = def.synth === 'beats' ? await loadVoices(def) : undefined;
+          const voiceSample = def.voice === 'sample' && def.voiceUrl ? { buf: await oneShot(def.voiceUrl), root: def.voiceRoot, gain: def.voiceGain, loop: def.voiceLoop } : undefined; /* a kit's recorded voice */
           buf = await ResonanceSynth.renderStem({
-            samples, pattern: def.synth === 'beats' ? { voices: def.voices, tiers: def.tiers, steps: def.steps } : undefined,
+            voice: def.voice, voiceSample, tpl: def.tpl, samples, pattern: def.synth === 'beats' ? { voices: def.voices, tiers: def.tiers, steps: def.steps } : undefined,
             synth: def.synth, id: def.id, sampleRate: ctx.sampleRate, tempo,
             beatsPerBar: cfg.beatsPerBar, bars: def.bars || 8, key, mode: cfg.mode, progression: def.progression, style: def.style, seed: varSeed.has(def.id) ? varSeed.get(def.id) : seed, planSeed: seed, custom, lush, tiers: !!def.complexity,
           });
@@ -1242,47 +1243,71 @@
   function kitBar() { /* the button in the effect column: the live kit's name, and a pulse while a swap is waiting */
     const b = $('#kitBtn'); if (!b) return;
     const k = cfg && cfg.pack && cfg.pack.kit;
-    b.textContent = kitPendingNow ? 'Changing…' : k ? 'Kit: ' + k.name : 'Kits…'; b.classList.toggle('busy', !!kitPendingNow);
+    b.textContent = kitPendingNow ? 'Changing…' : k ? 'Favorite: ' + k.name : 'Kit · Templates…'; b.classList.toggle('busy', !!kitPendingNow);
   }
   let kitPendingNow = null;
   async function loadKits() {
     try { kitData = await (await fetch('/api/kits', { cache: 'no-store' })).json(); renderKits(); }
-    catch (e) { $('#kitBody').innerHTML = `<p class="muted">Couldn't load kits: ${esc(e.message)}</p>`; }
+    catch (e) { $('#kitBody').innerHTML = `<p class="muted">Couldn't load the kits: ${esc(e.message)}</p>`; }
   }
   function renderKits() {
     const d = kitData, cur = d.current || {}, picks = cur.picks || {};
-    if (!d.canKit) { $('#kitBody').innerHTML = `<p class="muted">Kits swap the Melodic and Rhythmic groups, and the live pack has no such groups. Use a pack like “Layers” first.</p>`; return; }
+    if (!d.canKit) { $('#kitBody').innerHTML = `<p class="muted">Favorites swap the Melodic and Rhythmic groups, and the live pack has no such groups. Use a pack like “Layers” first.</p>`; return; }
+    const sk = d.soundKits || [], slots = d.slots || [];
+    const voiceName = (slot, v) => { const s = slots.find((x) => x.id === slot), q = s && s.voices.find((x) => x.id === v); return q ? q.name : (v || '—'); };
+    const kitLine = (k) => slots.map((s) => `<span class="kv"><b>${esc(s.name)}</b> ${esc(voiceName(s.id, k.voices[s.id]))}</span>`).join('');
     const opts = (role) => {
       const r = d.roles[role];
       return `<option value="">Pack's own (${r.slots} stems)</option>` + r.sets.map((x) => `<option value="${esc(x.id)}" ${x.ok ? '' : 'disabled'} ${picks[role] === x.id ? 'selected' : ''}>${esc(x.name)}${x.ok ? '' : ' — ' + esc(x.reason)}</option>`).join('');
     };
-    const setsLine = (role, id) => { const x = d.roles[role].sets.find((q) => q.id === id); return x ? x.stems.map((s) => esc(s.name)).join(' · ') + (x.warnings.length ? '<br>⚠ ' + esc(x.warnings.join('; ')) : '') : 'The sounds the pack came with.'; };
+    const setsLine = (role, id) => { const x = d.roles[role].sets.find((q) => q.id === id); return x ? x.stems.map((s) => esc(s.name) + (s.tpl ? ` (${esc(s.tpl)})` : '')).join(' · ') + (x.warnings.length ? '<br>⚠ ' + esc(x.warnings.join('; ')) : '') : 'The sounds the pack came with.'; };
+    const favKit = (k) => k.kit ? (sk.find((x) => x.id === k.kit) || { name: k.kit }).name : null;
     $('#kitBody').innerHTML = `
-      <section><h3>Saved kits</h3>${d.kits.length ? d.kits.map((k) => `<div class="kit${cur.kit === k.id ? ' active' : ''}">
-        <div><b>${esc(k.name)}</b><small>${esc(k.description || '')}${k.description ? '<br>' : ''}Melodic: ${esc(kitNameOf(k.melodic, 'melodic'))} · Rhythmic: ${esc(kitNameOf(k.rhythmic, 'rhythmic'))}${k.micro ? ' · with Microcosm settings' : ''}</small></div>
-        <div class="kitbtns"><button data-kit="${esc(k.id)}">${cur.kit === k.id ? 'Reload' : 'Load'}</button><button class="kitrm" data-rm="${esc(k.id)}" title="Delete this kit file">Remove</button></div></div>`).join('') : '<p class="muted">No kits yet. Pick sounds below, load them, and save them as a kit.</p>'}</section>
-      <section><h3>Pick sounds</h3>
-        <div class="kitpick">
-          <label><span class="label">Melodic</span><select id="kitMel">${opts('melodic')}</select><span class="kitsets" id="kitMelSets"></span></label>
-          <label><span class="label">Rhythmic</span><select id="kitRhy">${opts('rhythmic')}</select><span class="kitsets" id="kitRhySets"></span></label>
-        </div>
-        <div style="margin-top:10px"><button id="kitLoad">Load these sounds</button></div>
+      <section><h3>1 · Kit — the sound</h3>
+        <label class="kitone"><select id="kitSound"><option value="">None: the template's own sounds</option>${sk.map((k) => `<option value="${esc(k.id)}" ${picks.kit === k.id ? 'selected' : ''}>${esc(k.name)}</option>`).join('')}</select></label>
+        <div class="kitvoices" id="kitVoices"></div>
+        <details class="kitedit"><summary>Make or change a kit</summary>
+          <p class="muted" style="margin:6px 0">A kit gives each role a voice. Any template can be played with any kit. Kits that use recordings are folders in <code>soundkits/</code> (see the manual).</p>
+          <div class="kitgrid" id="kitGrid">${slots.map((s) => `<label><span class="label">${esc(s.name)}</span><select data-slot="${esc(s.id)}">${s.voices.filter((v) => v.id !== 'sample').map((v) => `<option value="${esc(v.id)}">${esc(v.name)}</option>`).join('')}</select></label>`).join('')}</div>
+          <div class="kitsave" style="margin-top:8px"><input id="skName" type="text" maxlength="60" placeholder="Kit name"><button id="skSave">Save kit</button></div>
+        </details>
       </section>
-      <section><h3>Save what is live as a kit</h3>
-        <div class="kitsave"><input id="kitName" type="text" maxlength="60" placeholder="Kit name" value="${esc(cfg && cfg.pack && cfg.pack.kit && cfg.pack.kit.name || '')}"><button id="kitSave">Save kit</button></div>
-        <p class="muted" style="margin:6px 0 0;font-size:12px">Saves the Melodic and Rhythmic sounds that are live, plus both Microcosm boxes (presets, knobs, which instruments feed them). Saving with an existing name updates it.</p>
+      <section><h3>2 · Templates — the notes</h3>
+        <div class="kitpick">
+          <label><span class="label">Melodic template</span><select id="kitMel">${opts('melodic')}</select><span class="kitsets" id="kitMelSets"></span></label>
+          <label><span class="label">Rhythmic template</span><select id="kitRhy">${opts('rhythmic')}</select><span class="kitsets" id="kitRhySets"></span></label>
+        </div>
+        <p class="muted" style="margin:8px 0 0;font-size:12px">The template decides the chords and which notes play. The kit decides what they sound like: Melody A and Melody B can play any melody.</p>
+        <div style="margin-top:10px"><button id="kitLoad">Load kit + templates</button></div>
+      </section>
+      <section><h3>3 · Favorites</h3>${d.kits.length ? d.kits.map((k) => `<div class="kit${cur.kit === k.id ? ' active' : ''}">
+        <div><b>${esc(k.name)}</b><small>${esc(k.description || '')}${k.description ? '<br>' : ''}${favKit(k) ? 'Kit: ' + esc(favKit(k)) + ' · ' : ''}Melodic: ${esc(kitNameOf(k.melodic, 'melodic'))} · Rhythmic: ${esc(kitNameOf(k.rhythmic, 'rhythmic'))}${k.micro ? ' · with Microcosm settings' : ''}</small></div>
+        <div class="kitbtns"><button data-kit="${esc(k.id)}">${cur.kit === k.id ? 'Reload' : 'Load'}</button><button class="kitrm" data-rm="${esc(k.id)}" title="Delete this favorite">Remove</button></div></div>`).join('') : '<p class="muted">No favorites yet. Pick a kit and templates above, load them, and save the combination below.</p>'}
+        <div class="kitsave" style="margin-top:10px"><input id="kitName" type="text" maxlength="60" placeholder="Favorite name" value="${esc(cfg && cfg.pack && cfg.pack.kit && cfg.pack.kit.name || '')}"><button id="kitSave">Save favorite</button></div>
+        <p class="muted" style="margin:6px 0 0;font-size:12px">Saves the kit, both templates that are live, and both Microcosm boxes (presets, knobs, which instruments feed them). Saving with an existing name updates it.</p>
       </section>`;
-    const upd = () => { $('#kitMelSets').innerHTML = setsLine('melodic', $('#kitMel').value); $('#kitRhySets').innerHTML = setsLine('rhythmic', $('#kitRhy').value); };
-    $('#kitMel').addEventListener('change', upd); $('#kitRhy').addEventListener('change', upd); upd();
+    const kitNow = () => sk.find((k) => k.id === $('#kitSound').value);
+    const upd = () => {
+      $('#kitMelSets').innerHTML = setsLine('melodic', $('#kitMel').value); $('#kitRhySets').innerHTML = setsLine('rhythmic', $('#kitRhy').value);
+      const k = kitNow(); $('#kitVoices').innerHTML = k ? kitLine(k) + (k.warnings.length ? '<br>⚠ ' + esc(k.warnings.join('; ')) : '') + (k.description ? `<br><span class="muted">${esc(k.description)}</span>` : '') : '<span class="muted">Each template plays with its own sounds.</span>';
+      if (k) $('#kitGrid').querySelectorAll('select').forEach((sel) => { if ([...sel.options].some((o) => o.value === k.voices[sel.dataset.slot])) sel.value = k.voices[sel.dataset.slot]; });
+      if (k && !$('#skName').value) $('#skName').value = k.editable ? k.name : '';
+    };
+    $('#kitMel').addEventListener('change', upd); $('#kitRhy').addEventListener('change', upd); $('#kitSound').addEventListener('change', upd); upd();
+    $('#skSave').addEventListener('click', () => {
+      const name = $('#skName').value.trim(); if (!name) { toast('kit', 'err', 'Give the kit a name first.'); return; }
+      const voices = {}; $('#kitGrid').querySelectorAll('select').forEach((sel) => { voices[sel.dataset.slot] = sel.value; });
+      send({ type: 'soundKitSave', name, voices }); toast('kit', 'ok', `✓ Saved kit “${name}”`); setTimeout(loadKits, 600);
+    });
     $('#kitBody').querySelectorAll('[data-rm]').forEach((b) => b.addEventListener('click', () => { /* two clicks: the second one removes */
       if (!b.classList.contains('armed')) { b.classList.add('armed'); b.textContent = 'Really remove?'; setTimeout(() => { b.classList.remove('armed'); b.textContent = 'Remove'; }, 3500); return; }
-      send({ type: 'kitDelete', id: b.dataset.rm }); toast('kit', 'ok', 'Kit removed.'); setTimeout(loadKits, 500);
+      send({ type: 'kitDelete', id: b.dataset.rm }); toast('kit', 'ok', 'Favorite removed.'); setTimeout(loadKits, 500);
     }));
-    $('#kitBody').querySelectorAll('[data-kit]').forEach((b) => b.addEventListener('click', () => { send({ type: 'kit', id: b.dataset.kit }); toast('kit', 'work', 'Kit requested: the Melodic and Rhythmic sounds are fading out…'); closeKits(); }));
-    $('#kitLoad').addEventListener('click', () => { send({ type: 'kit', melodic: $('#kitMel').value || null, rhythmic: $('#kitRhy').value || null, name: 'Custom sounds' }); toast('kit', 'work', 'Kit requested: the Melodic and Rhythmic sounds are fading out…'); closeKits(); });
+    $('#kitBody').querySelectorAll('[data-kit]').forEach((b) => b.addEventListener('click', () => { send({ type: 'kit', id: b.dataset.kit }); toast('kit', 'work', 'Favorite requested: the Melodic and Rhythmic sounds are fading out…'); closeKits(); }));
+    $('#kitLoad').addEventListener('click', () => { send({ type: 'kit', kit: $('#kitSound').value || null, melodic: $('#kitMel').value || null, rhythmic: $('#kitRhy').value || null, name: 'Custom sounds' }); toast('kit', 'work', 'Requested: the Melodic and Rhythmic sounds are fading out…'); closeKits(); });
     $('#kitSave').addEventListener('click', async () => {
-      const name = $('#kitName').value.trim(); if (!name) { toast('kit', 'err', 'Give the kit a name first.'); return; }
-      send({ type: 'kitSave', name, micro: microNow() }); toast('kit', 'ok', `✓ Saved kit “${name}”`); setTimeout(loadKits, 500);
+      const name = $('#kitName').value.trim(); if (!name) { toast('kit', 'err', 'Give the favorite a name first.'); return; }
+      send({ type: 'kitSave', name, micro: microNow() }); toast('kit', 'ok', `✓ Saved favorite “${name}”`); setTimeout(loadKits, 500);
     });
   }
   const openKits = () => { $('#kits').hidden = false; loadKits(); };

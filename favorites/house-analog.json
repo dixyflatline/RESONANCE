@@ -1,0 +1,8 @@
+{
+  "name": "House \u00b7 analog",
+  "description": "Dance / House progression in the Analog kit with a four-on-the-floor pulse.",
+  "kit": "analog",
+  "melodic": "melody-house",
+  "rhythmic": "rhythm-floor",
+  "order": 6
+}

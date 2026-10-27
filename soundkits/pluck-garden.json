@@ -1,0 +1,12 @@
+{
+  "name": "Pluck garden",
+  "description": "Everything plucked: plucked chords, bass and arp, with a pluck lead and a bell second melody.",
+  "order": 4,
+  "voices": {
+    "chords": "pluck",
+    "bass": "pluck",
+    "arp": "pluck",
+    "melodyA": "pluck",
+    "melodyB": "bell"
+  }
+}

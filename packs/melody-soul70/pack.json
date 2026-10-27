@@ -1,6 +1,6 @@
 {
   "name": "Melody · Soulful seventies",
-  "description": "The warm turnaround Fmaj7 – Dm7 – Gm7 – C9 (I vi ii V), a lyrical melody. All chords use the notes of D minor (the same as F major), so it sits on the ambient Drone, Pad and Atmos. A genre-typical progression, not a copy of any product's presets. New variation re-rolls the melody; Key transposes it.",
+  "description": "The warm turnaround Fmaj7 – Dm7 – Gm7 – C9 (I vi ii V), a lyrical melody. All chords use the notes of D minor (the same as F major), so it sits on the ambient Drone, Pad and Atmos. A genre-typical progression, not a copy of any product's presets. New variation re-rolls the melody; Key transposes it. A melodic template: pick a Kit to give Chords, Bass, Arp and Melody A / B their sounds.",
   "tempo": 50,
   "beatsPerBar": 4,
   "key": "D",
@@ -14,42 +14,60 @@
   "order": 37,
   "stems": [
     {
-      "name": "Prog chords",
+      "name": "Chords",
       "role": "harmony",
       "synth": "mchords",
+      "slot": "chords",
       "bars": 8,
       "gain": 0.7,
       "color": "#8b6cf0",
       "progression": "soul70"
     },
     {
-      "name": "Prog bass",
+      "name": "Bass",
       "role": "bass",
       "synth": "mbass",
+      "slot": "bass",
       "bars": 8,
       "gain": 0.75,
       "color": "#2fb5a3",
       "progression": "soul70"
     },
     {
-      "name": "Prog arp",
+      "name": "Arp",
       "role": "arpeggio",
       "synth": "marp",
+      "slot": "arp",
       "bars": 8,
       "gain": 0.6,
       "color": "#e8a33d",
       "progression": "soul70"
     },
     {
-      "name": "Melody",
+      "name": "Melody A",
       "role": "lead",
       "synth": "melody",
+      "slot": "melodyA",
       "bars": 8,
       "gain": 0.8,
       "color": "#e0655a",
       "progression": "soul70",
       "style": "lyrical"
+    },
+    {
+      "name": "Melody B",
+      "role": "second lead",
+      "synth": "melody",
+      "slot": "melodyB",
+      "bars": 8,
+      "gain": 0.8,
+      "color": "#e58fb0",
+      "progression": "soul70",
+      "style": "flowing"
     }
   ],
-  "mode": "minor"
+  "mode": "minor",
+  "sets": [
+    "melodic"
+  ]
 }

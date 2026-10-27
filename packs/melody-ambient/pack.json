@@ -21,7 +21,8 @@
       "progression": "ambient",
       "bars": 8,
       "gain": 0.8,
-      "color": "#e0655a"
+      "color": "#e0655a",
+      "slot": "melodyA"
     },
     {
       "name": "Melody B · Flowing",
@@ -31,7 +32,8 @@
       "progression": "ambient",
       "bars": 8,
       "gain": 0.8,
-      "color": "#e58fb0"
+      "color": "#e58fb0",
+      "slot": "melodyB"
     },
     {
       "name": "Melody C · Leaping",
@@ -60,7 +62,11 @@
       "progression": "ambient",
       "bars": 8,
       "gain": 0.6,
-      "color": "#e8a33d"
+      "color": "#e8a33d",
+      "slot": "arp"
     }
+  ],
+  "sets": [
+    "melodic"
   ]
 }
