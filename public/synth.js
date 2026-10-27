@@ -835,38 +835,129 @@
     dense: { pOn: 0.99, pOff: 0.4, hold: 0.0, step: 3.0, oct: 0, type: 'triangle', decay: 0.9, echo: 0.28 }, // a note on almost every beat; used for the busier layers of the long leads
   };
   /* gainMul scales the level (the busier line of the long leads is quieter). `voice` plays the notes: pluck keeps the original sound, the others are listed above. */
+  /* How a character phrases its line: nb = about how many notes a bar; maxLen = the longest a note may be, in eighth notes (a note that is
+     shorter than the gap to the next one leaves a rest); leap = chance of a leap; tie = chance that a note runs on into the next one (a slur,
+     which the glide and acid voices join with a slide); gate = how much of its length a note sounds; adj = may play adjacent eighths. */
+  const MEL_SHAPE = {
+    lyrical: { nb: 3, maxLen: 5, leap: 0.12, tie: 0.35, gate: 0.85, adj: false, orn: 0.5, lift: [0, 1, 3, -1] },
+    flowing: { nb: 5.5, maxLen: 2, leap: 0.15, tie: 0.15, gate: 0.8, adj: true, orn: 0, lift: [0, 2, 1, -1] },
+    leaping: { nb: 4, maxLen: 3, leap: 0.3, tie: 0.1, gate: 0.8, adj: false, orn: 0.6, lift: [0, 3, 5, 0] },
+    bright: { nb: 3, maxLen: 6, leap: 0.18, tie: 0.2, gate: 0.9, adj: false, orn: 0.5, lift: [1, 3, 4, 0] },
+    dense: { nb: 7, maxLen: 2, leap: 0.12, tie: 0, gate: 0.7, adj: true, orn: 0, lift: [0, 1, 2, 0] },
+    dflt: { nb: 4, maxLen: 3, leap: 0.2, tie: 0.2, gate: 0.85, adj: false, orn: 0.4, lift: [0, 1, 2, -1] },
+  };
+  /* The note-by-note melody generator, written like a topline writer works rather than by coin flips:
+     - Rhythm first. A bar's rhythm is a cell: a few onsets that favour the strong places (beat 1, beat 3, then the other beats, then the off-beats),
+       each note no longer than the style allows, so the line breathes: the gaps are rests. The phrase is four bars: the cell (A), A varied, a contrasting
+       cell (B), and a sparser cadence cell that ends on a longer note. The next four bars reuse the same cells, so the ear hears a motif come back.
+     - Then pitch. The motif has a contour (steps up and down, now and then a leap that is answered by a step back). Each bar starts on a chord tone of its
+       chord near where the last bar stopped and replays the contour from there; notes on strong beats are pulled to chord tones, the others pass between them.
+       The end of a four-bar phrase leans to the next chord's tone, the end of the loop lands on the tonic.
+     - Then choose. Twelve whole lines are written and scored (chord tones on strong beats, small leaps, no long runs of one note, range, how much is
+       repeated, rests present, a good ending); the best one is played. Same seed, same line: the layers are cut from it, not re-rolled. */
   function pluckedMelody(ctx, out, verb, m, styleKey, gainMul, ranked = null, voice = 'pluck') {
     const st = MEL_STYLES[styleKey] || { pOn: 0.38, pOff: 0.16, hold: 0.4, step: 4.4, oct: 0, type: 'triangle', decay: 0.8, echo: 0.28 };
+    const P = MEL_SHAPE[styleKey] || MEL_SHAPE.dflt;
     const poolAll = [];
     const mb = m.custom ? 0 : 12; /* a chord chart plays the melody an octave lower */
     for (let o = 0; o < 3; o++) for (const d of m.scale) { const n = m.root + mb + o * 12 + d; if (n <= m.root + mb + 19) poolAll.push(n); }
-    let pool = poolAll;
     const pcs = (chord) => chord.map((n) => ((n % 12) + 12) % 12);
     const isTone = (n, chord) => pcs(chord).includes(((n - m.root) % 12 + 12) % 12);
-    const nearest = (n, pred) => pool.filter(pred).sort((a, b) => Math.abs(a - n) - Math.abs(b - n))[0] ?? n;
-    let cur = nearest(m.root + mb + 7, (n) => isTone(n, m.prog[0]));
-    const evs = []; /* every note of the line, so the layers can be assigned once the whole line is known */
-    m.forProg((chord, t0, seg, i, cnt) => {
-      if (m.ambient) { const ok = poolAll.filter((n) => m.plan.okAbove(n + st.oct, i)); /* st.oct: the 'bright' style plays an octave up */ pool = ok.length ? ok : poolAll; } // notes that fit under this chord's pad/atmos/bass
-      const next = m.prog[(i + 1) % cnt], last = !m.ambient && i === cnt - 1, slots = Math.round(seg / (m.beat / 2));
-      const onsets = [0];
-      for (let s = 2; s < slots; s++) {
-        const gap = s - onsets[onsets.length - 1];
-        if (gap >= 2 && m.rnd() < (s % 2 === 0 ? st.pOn : st.pOff) + (gap >= 5 ? st.hold : 0)) onsets.push(s);
+    const slot = m.beat / 2, barSlots = m.bpb * 2, rnd = m.rnd;
+    const segs = []; m.forProg((chord, t0, seg, i, cnt) => segs.push({ chord, t0, seg, i, next: m.prog[(i + 1) % cnt], lastSeg: !m.ambient && i === cnt - 1 }));
+    const poolOf = (sg) => { if (!m.ambient) return poolAll; const ok = poolAll.filter((n) => m.plan.okAbove(n + st.oct, sg.i)); return ok.length ? ok : poolAll; }; // notes that fit under this chord's pad/atmos/bass
+    const bars = []; segs.forEach((sg) => { const n = Math.max(1, Math.round(sg.seg / m.bar)); for (let b = 0; b < n; b++) { const t = sg.t0 + b * m.bar; bars.push({ sg, t, slots: Math.max(1, Math.min(barSlots, Math.round((sg.t0 + sg.seg - t) / slot))), lastOfSeg: b === n - 1 }); } });
+    const wSlot = (x) => (x === 0 ? 1 : x % 4 === 0 ? 0.8 : x % 2 === 0 ? 0.5 : P.adj ? 0.42 : 0.22);
+    const pickIdx = (list, w) => { let tot = 0; for (const x of list) tot += w(x); let r = rnd() * tot; for (const x of list) { r -= w(x); if (r <= 0) return x; } return list[list.length - 1]; };
+    const makeCell = (slots, sparse) => { /* [{ s: onset slot, len: slots }] */
+      const k = Math.max(2, Math.min(slots, Math.round(P.nb * (sparse ? 0.6 : 0.7 + rnd() * 0.6)))), on = new Set();
+      if (rnd() < 0.85) on.add(0);
+      for (let guard = 0; on.size < k && guard < 60; guard++) {
+        const free = []; for (let x = 0; x < slots; x++) if (!on.has(x) && (P.adj || (!on.has(x - 1) && !on.has(x + 1)))) free.push(x);
+        if (!free.length) break; on.add(pickIdx(free, wSlot));
       }
-      onsets.forEach((s, k) => {
-        const strong = s % 4 === 0, final = k === onsets.length - 1, lv = strong || final ? 0 : s % 2 === 0 ? 1 : 2; /* complexity: strong beats and phrase ends, then the other beats, then the off-beats */
-        let idx = pool.indexOf(cur);
-        idx = Math.max(0, Math.min(pool.length - 1, idx + Math.round((m.rnd() - 0.5) * st.step)));
-        let n = pool[idx];
-        if (final) n = last ? nearest(cur, (x) => (x - m.root) % 12 === 0)
-          : nearest(cur, (x) => isTone(x, next));
-        else if (strong || k === 0) n = nearest(n, (x) => isTone(x, chord));
-        cur = n;
-        const dur = ((onsets[k + 1] ?? slots) - s) * m.beat / 2, pan = (m.rnd() - 0.5) * 0.4;
-        evs.push({ lv, key: ranked ? m.rnd() : 0, first: strong || final ? 0 : 1, strong, t: t0 + s * m.beat / 2, n: n + st.oct, dur, gain: (strong ? 0.32 : 0.25) * (st.oct ? 0.75 : 1) * gainMul, decay: Math.min(3, st.decay + dur), type: st.type, pan });
+      const o = [...on].sort((x, y) => x - y);
+      const cell = o.map((s, j) => ({ s, len: Math.max(1, Math.min((o[j + 1] ?? slots) - s, P.maxLen)) }));
+      if (!sparse && rnd() < P.orn) { /* a pick-up or passing eighth on an off-beat: it cuts the note it lands in short (this is what the busiest layer adds) */
+        const odd = []; for (let x = 1; x < slots; x += 2) if (!on.has(x)) odd.push(x);
+        if (odd.length) { const x = odd[Math.floor(rnd() * odd.length)], c = cell.filter((q) => q.s < x).pop(); if (c) { c.len = Math.min(c.len, x - c.s); cell.push({ s: x, len: 1 }); cell.sort((a, b) => a.s - b.s); } }
+      }
+      return cell;
+    };
+    const vary = (cell, slots) => { /* the same rhythm with one change: a note moved by an eighth, or one dropped */
+      const c = cell.map((x) => ({ ...x })); if (c.length < 3) return c;
+      const j = 1 + Math.floor(rnd() * (c.length - 1));
+      if (rnd() < 0.5) { const nx = c[j].s + (rnd() < 0.5 ? -1 : 1); if (nx > (c[j - 1].s) && nx < (c[j + 1] ? c[j + 1].s : slots)) c[j].s = nx; } else c.splice(j, 1);
+      return c.map((x, q) => ({ s: x.s, len: Math.max(1, Math.min((c[q + 1] ? c[q + 1].s : slots) - x.s, P.maxLen)) }));
+    };
+    const makeDeltas = (k) => { /* the contour, in scale steps from note to note: it rises through the first half of the bar and falls through the second, or the reverse */
+      const d = [0]; let back = 0; const flip = rnd() < 0.5 ? -1 : 1;
+      for (let j = 1; j < k; j++) {
+        const bias = (j < k / 2 ? 1 : -1) * flip;
+        if (back) { d.push(back); back = 0; continue; }
+        const r = rnd();
+        if (r < P.leap) { const L = (3 + Math.floor(rnd() * 3)) * (rnd() < 0.5 ? -bias : bias); d.push(L); back = L > 0 ? -1 : 1; } /* a leap is answered by a step back */
+        else d.push(r < P.leap + 0.1 ? 0 : (rnd() < 0.7 ? bias : -bias) * (rnd() < 0.75 ? 1 : 2));
+      }
+      return d;
+    };
+    const build = () => {
+      const A = makeCell(barSlots), A1 = vary(A, barSlots), B = makeCell(barSlots), C0 = makeCell(barSlots, true);
+      const C = C0.length ? C0.map((x) => ({ ...x })) : A; const lastC = C[C.length - 1]; if (lastC.s < Math.floor(barSlots / 2)) C.push({ s: Math.floor(barSlots / 2), len: 1 });
+      C[C.length - 1].len = Math.min(P.maxLen + 2, barSlots - C[C.length - 1].s); /* the cadence ends on a longer note */
+      const dA = makeDeltas(Math.max(A.length, A1.length, 8)), dB = makeDeltas(Math.max(B.length, 8));
+      const evs = []; let cur = null, pool = poolAll;
+      bars.forEach((bar, bi) => {
+        const pos = bi % 4, cell = (pos === 0 ? A : pos === 1 ? A1 : pos === 2 ? B : C).filter((x) => x.s < bar.slots), D = pos === 2 ? dB : dA;
+        if (!cell.length) return;
+        const sg = bar.sg; pool = poolOf(sg);
+        const nearest = (n, pred) => pool.filter(pred).sort((x, y) => Math.abs(x - n) - Math.abs(y - n))[0] ?? n;
+        if (cur === null) cur = nearest(m.root + mb + 7, (n) => isTone(n, segs[0].chord));
+        /* where the bar starts: the phrase's contour (P.lift: a gentle arch over four bars, a step higher the second time round) around the fifth of the key */
+        const home = pool.indexOf(nearest(m.root + mb + 7, () => true)), lift = P.lift[pos] + (Math.floor(bi / 4) % 2);
+        const aim = pool[Math.max(0, Math.min(pool.length - 1, (home < 0 ? 0 : home) + lift))];
+        let idx = pool.indexOf(nearest(aim, (n) => isTone(n, sg.chord)));
+        if (idx < 0) idx = 0;
+        const barEnd = bi === bars.length - 1, cadence = pos === 3 || barEnd;
+        cell.forEach((nt, j) => {
+          if (j > 0) idx = Math.max(0, Math.min(pool.length - 1, idx + D[j % D.length]));
+          let n = pool[idx];
+          const strong = nt.s % 4 === 0, final = j === cell.length - 1 && cadence && bar.lastOfSeg;
+          if (final) n = barEnd && sg.lastSeg ? nearest(cur, (x) => (x - m.root) % 12 === 0) : nearest(n, (x) => isTone(x, sg.next));
+          else if (strong || j === 0) n = nearest(n, (x) => isTone(x, sg.chord));
+          idx = pool.indexOf(n); if (idx < 0) idx = 0; cur = n;
+          const tie = !final && P.tie > 0 && j < cell.length - 1 && cell[j + 1].s === nt.s + nt.len && rnd() < P.tie;
+          const lv = strong || final ? 0 : nt.s % 2 === 0 ? 1 : 2; /* complexity: strong beats and phrase ends, then the other beats, then the off-beats */
+          const dur = nt.len * slot * (tie ? 1 : P.gate * (0.92 + rnd() * 0.12)), pan = (rnd() - 0.5) * 0.4;
+          evs.push({ lv, key: 0, first: strong || final ? 0 : 1, strong, final, tie, t: bar.t + nt.s * slot, n: n + st.oct, dur, gain: (strong ? 0.32 : 0.25) * (st.oct ? 0.75 : 1) * gainMul, decay: Math.min(3, st.decay + dur), type: st.type, pan, chord: sg.chord });
+        });
       });
-    });
+      return evs;
+    };
+    const score = (evs) => {
+      if (!evs.length) return -1e9;
+      let sc = 0, strongN = 0, strongTone = 0, run = 1, rests = 0;
+      for (let i = 0; i < evs.length; i++) {
+        const e = evs[i], pv = evs[i - 1];
+        if (e.strong) { strongN++; if (isTone(e.n - st.oct, e.chord)) strongTone++; }
+        if (pv) {
+          const iv = Math.abs(e.n - pv.n); if (iv > 9) sc -= 2; else if (iv > 5 && !P.leap) sc -= 1;
+          if (iv === 0) { run++; if (run > 2) sc -= 1.5; } else run = 1;
+          if (e.t - (pv.t + pv.dur) > slot * 1.5) rests++;
+        }
+      }
+      sc += 4 * (strongN ? strongTone / strongN : 1) + Math.min(rests, bars.length) * 0.4;
+      const per = evs.length / Math.max(1, bars.length); sc -= Math.abs(per - P.nb) * 0.6;
+      const ns = evs.map((e) => e.n), span = Math.max(...ns) - Math.min(...ns); sc -= span > 14 ? (span - 14) * 0.5 : 0; sc -= span < 4 ? 2 : 0;
+      const sig = (b) => evs.filter((e) => e.t >= bars[b].t - 1e-6 && e.t < bars[b].t + m.bar - 1e-6).map((e) => Math.round((e.t - bars[b].t) / slot)).join();
+      const seen = new Set(); let rep = 0; for (let b = 0; b < bars.length; b++) { const k = sig(b); if (seen.has(k)) rep++; seen.add(k); } sc += Math.min(rep, 3) * 0.6;
+      const last = evs[evs.length - 1]; if (isTone(last.n - st.oct, last.chord)) sc += 1.5;
+      return sc;
+    };
+    let evs = null, bestSc = -1e9;
+    for (let c = 0; c < 12; c++) { const cand = build(), sc = score(cand); if (sc > bestSc) { bestSc = sc; evs = cand; } }
+    evs = evs || [];
+    if (ranked) for (const e of evs) e.key = rnd(); /* (drawn after the choice, so the dense line's order is its own) */
     if (ranked) { /* strong beats and phrase ends first, then the rest in a fixed random order: the first n1 are layer 1, the next n2 layer 2 */
       [...evs].sort((a, b) => a.first - b.first || a.key - b.key).forEach((e, k) => { e.lv = k < ranked.n1 ? 1 : k < ranked.n1 + ranked.n2 ? 2 : -1; });
     }
@@ -877,10 +968,8 @@
       return;
     }
     const bus = voiceBus(ctx, out, verb, m, { echo: st.echo, rv: 0.9, delay: 0.75 });
-    const line0 = evs.filter((e) => e.lv === 0 && !ranked); /* the sparse line (layer 0): for a mono voice each note is held up to the next one, so the line is legato */
-    const events = mine.map((e) => {
-      let d = e.dur;
-      if (MONO_VOICES.has(voice)) { const nx = line0.find((x) => x.t > e.t + 1e-6); d = e.lv === 0 && !ranked ? Math.min(nx ? nx.t - e.t : m.L - e.t, m.bar * 2) : Math.min(e.dur, m.beat * 0.9); }
+    const events = mine.map((e) => { /* a mono voice joins notes that touch (a slur) and leaves the gaps between the others */
+      const d = MONO_VOICES.has(voice) && ranked ? Math.min(e.dur, m.beat * 0.9) : e.dur;
       return { t: e.t, d, n: e.n, gain: e.gain, pan: e.pan, accent: e.strong, decay: e.decay, type: e.type, lv: e.lv, line: e.lv };
     });
     playEvents(ctx, bus, m, voice, events, { rnd: m.rndT, lines: ranked ? { 1: { gain: voice === 'acid' ? 0.04 : 0.05, pan: 0.3 }, 2: { gain: voice === 'acid' ? 0.035 : 0.04, pan: -0.3 } } : null });
