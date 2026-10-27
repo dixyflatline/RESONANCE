@@ -267,6 +267,10 @@ While the engine renders a layer that has complexity, `synth.js` records every n
 
 The seed of the Pulse and Sub stems picks a rhythm template, so **New variation** in their pad window changes the groove. Pulse: Heartbeat, Tresillo, Four on the floor, Half-time breath, Syncopated, Rolling toms. Sub: Long line, Root and chord tone, Syncopated bass, Slow breath, Octave bounce, Chord walk. Sub can play chord tones as well as D and A, kept clear of the drone's pitches and of the pad, atmos and arp notes. The harmony always follows the show seed (`planSeed`), so varying one instrument never changes the chords. The toast after a variation names the template.
 
+### Genre melody packs
+
+Ten Melody packs, each with Prog chords, Prog bass, Prog arp and a Melody on one genre progression: **Ballad, Pop, Dance / House, Gospel, Jazz, Lo-fi / West Coast, R&B / Neo-soul, Soulful seventies, Boom-bap (dark minor)** and **Trap (dark)**. Load one with Kits… > Load these sounds > Melodic. Every chord is built from the notes of D minor (the same as F major), so the melody, chords and arp are diatonic and sit on the ambient Drone, Pad and Atmos. The progressions are typical of each genre, not copies of any product's presets. They are defined in `PROG_LIB` in `public/synth.js`, and a pack picks one with `"progression": "<key>"` on its stems; the arp's pattern (`rolling`, `pulse`) and the melody's character (`lyrical`, `flowing`, `leaping`, `bright`) come from each stem's `style`.
+
 ## Kits
 
 A kit swaps the **Melodic** and **Rhythmic** sounds of the live pack while the show runs (`lib/kits.js`, files in `kits/`, panel: **Kits…** on the engine page).

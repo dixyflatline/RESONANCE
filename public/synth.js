@@ -24,6 +24,24 @@
   const BASS = [0, -4, 3, -2];
   const PENTA = [0, 3, 5, 7, 10]; // minor pentatonic, for melody
 
+
+  /* Genre progressions for the Melody packs (packs/melody-*): every chord is built from the notes of D natural minor (= F major: D E F G A B♭ C),
+     so the melody, the chords and the arp stay diatonic and sit on the Drone, Pad and Atmos of the ambient stems (D minor). Roots are semitones above the tonic;
+     the Roman numerals are relative to the minor tonic. Pack stems pick one with "progression": "<key>". Typical of each genre, not copies of any product's presets. */
+  const QUALITIES = { m7: [0, 3, 7, 10], m9: [0, 3, 7, 10, 14], maj7: [0, 4, 7, 11], maj9: [0, 4, 7, 11, 14], 7: [0, 4, 7, 10], 9: [0, 4, 7, 10, 14], 'm7♭5': [0, 3, 6, 10], add9: [0, 4, 7, 14], sus4: [0, 5, 7, 12] };
+  const PROG_LIB = {};
+  const addProg = (key, name, list) => { PROG_LIB[key] = { name, chords: list.map(([o, q]) => QUALITIES[q].map((n) => o + n)), labels: list.map(([o, q, r]) => [o, q, r]) }; };
+  addProg('ballad', 'Ballad', [[3, 'maj9', 'III'], [7, 'm7', 'v'], [8, 'maj9', 'VI'], [10, '9', 'VII']]); /* I iii IV V in F: sweeping */
+  addProg('pop', 'Pop', [[3, 'add9', 'III'], [10, 'sus4', 'VII'], [0, 'm7', 'i'], [8, 'maj7', 'VI']]); /* I V vi IV in F, with sus4 */
+  addProg('house', 'Dance / House', [[0, 'm9', 'i'], [8, 'maj9', 'VI'], [5, 'm9', 'iv'], [7, 'm7', 'v']]); /* i VI iv v: deep house stabs */
+  addProg('gospel', 'Gospel', [[3, 'maj9', 'III'], [8, 'maj9', 'VI'], [7, 'm7', 'v'], [0, 'm9', 'i'], [5, 'm9', 'iv'], [10, '9', 'VII'], [3, 'maj9', 'III']]); /* I IV iii vi ii V I in F: the circle walks */
+  addProg('jazz', 'Jazz', [[5, 'm9', 'iv'], [10, '9', 'VII'], [3, 'maj9', 'III'], [0, 'm9', 'i'], [5, 'm9', 'iv'], [10, '9', 'VII'], [3, 'maj9', 'III']]); /* ii V I vi ii V I in F */
+  addProg('lofi', 'Lo-fi / West Coast', [[3, 'maj9', 'III'], [7, 'm7', 'v'], [0, 'm9', 'i'], [5, 'm9', 'iv']]); /* I iii vi ii: smooth and jazzy */
+  addProg('neosoul', 'R&B / Neo-soul', [[8, 'maj9', 'VI'], [7, 'm7', 'v'], [5, 'm9', 'iv'], [10, '9', 'VII']]); /* IV iii ii V in F: extended Rhodes-style */
+  addProg('soul70', 'Soulful seventies', [[3, 'maj7', 'III'], [0, 'm7', 'i'], [5, 'm7', 'iv'], [10, '9', 'VII']]); /* I vi ii V turnaround */
+  addProg('dark', 'Boom-bap (dark minor)', [[0, 'm7', 'i'], [2, 'm7♭5', 'ii°'], [8, 'maj7', 'VI'], [7, 'm7', 'v']]); /* i ii° VI v: gritty and tense */
+  addProg('trap', 'Trap (dark)', [[0, 'm9', 'i'], [8, 'maj7', 'VI'], [0, 'm9', 'i'], [2, 'm7♭5', 'ii°']]); /* i VI i ii°: ominous and sparse */
+
   // Melody pack: the progression 1 – 4 – 3 – 6 – 2 – 5 – 1 (2 bars per chord = 14 bars), in the
   // pack's mode. Minor (default) matches the generated ambient stems: i – iv – III – VI – ii° – v – i.
   // Chord tones in semitones above the tonic.
@@ -1113,11 +1131,13 @@
 
     marp(ctx, out, verb, m) {
       const bus = ctx.createGain(); bus.connect(out); bus.connect(verb.in(0.9));
-      const pat = [0, 2, 1, 3, 2, 4, 3, 1];
+      const PATS = { rolling: [0, 1, 2, 3, 4, 3, 2, 1], pulse: [0, 2, 0, 3, 0, 2, 0, 4] }; /* the stem's "style" picks the pattern (genre packs); steps past the chord's last tone wrap around */
+      const pat = PATS[m.style] || [0, 2, 1, 3, 2, 4, 3, 1];
       m.forProg((chord, t0, seg, ci) => {
         const steps = Math.round(seg / (m.beat / 2));
         for (let s = 0; s < steps; s++) {
-          let note = m.root + 24 + chord[pat[s % pat.length]] - (chord[pat[s % pat.length]] > 12 ? 12 : 0);
+          const tone = chord[pat[s % pat.length] % chord.length];
+          let note = m.root + 24 + tone - (tone > 12 ? 12 : 0);
           if (m.ambient) { note = m.plan.fit(note, ci); if (note === null) continue; } // follows the ambient stems: fits under the plan
           /* Complexity: layer 0 every other beat, layer 1 the beats in between, layer 2 the off-beat eighths */
           if (!m.want(s % 4 === 0 ? 0 : s % 2 === 0 ? 1 : 2)) continue;
@@ -1170,6 +1190,7 @@
     minor: [[0, 'm9', 'i'], [5, 'm9', 'iv'], [3, 'maj9', 'III'], [8, 'maj9', 'VI'], [2, 'm7♭5', 'ii°'], [7, 'm9', 'v'], [0, 'm9', 'i']],
     major: [[0, 'maj9', 'I'], [5, 'maj9', 'IV'], [4, 'm7', 'iii'], [9, 'm9', 'vi'], [2, 'm9', 'ii'], [7, '9', 'V'], [0, 'maj9', 'I']],
   };
+  for (const [k, v] of Object.entries(PROG_LIB)) LABELS[k] = v.labels;
   const PROG_SYNTHS = ['mchords', 'mbass', 'marp', 'melody'];
   const SHARP_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
   // Spell a transposed chord with sharps when its tonic's key signature uses them (E minor, B minor, G major, ...).
@@ -1183,7 +1204,7 @@
       const chords = custom.chords.map((c) => ({ name: nm(c.rel) + c.q + (c.bassRel != null && c.bassRel !== c.rel ? '/' + nm(c.bassRel) : ''), roman: c.roman, start: c.start, len: c.len }));
       return { bars: custom.bars, chords, keyName: names[tonic] + (custom.mode === 'major' ? '' : 'm'), custom: true };
     }
-    const kind = progression === 'ambient' || !PROG_SYNTHS.includes(synth) ? 'ambient' : (mode === 'major' ? 'major' : 'minor');
+    const kind = progression === 'ambient' || !PROG_SYNTHS.includes(synth) ? 'ambient' : PROG_LIB[progression] ? progression : (mode === 'major' ? 'major' : 'minor');
     const list = LABELS[kind], root = KEY_ROOTS[key] ?? 50, chords = [];
     const lens = [];
     if (kind === 'ambient' && progression !== 'ambient') { // the ambient stems: one chord every 2 bars, cycling
@@ -1211,8 +1232,9 @@
     const custom = customFull ? slowHarmony(customFull) : null; // the upper voices follow one chord per bar (see slowHarmony)
     const ambient = !!custom || opts.progression === 'ambient';
     const style = opts.style; // follow the ambient stems' chords (i – VI – III – VII)
-    const mode = custom ? (custom.mode === 'major' ? 'major' : 'minor') : (ambient || opts.mode !== 'major' ? 'minor' : 'major');
-    const prog = custom ? custom.chords.map(customTones) : ambient ? CHORDS : PROGS[mode];
+    const lib = !custom && PROG_LIB[opts.progression] || null; // a genre progression (see PROG_LIB): D natural minor
+    const mode = custom ? (custom.mode === 'major' ? 'major' : 'minor') : (ambient || lib || opts.mode !== 'major' ? 'minor' : 'major');
+    const prog = custom ? custom.chords.map(customTones) : lib ? lib.chords : ambient ? CHORDS : PROGS[mode];
     const build = BUILDERS[synth];
     if (!build) throw new Error('Unknown synth type: ' + synth);
     const beat = 60 / tempo, bar = beat * bpb, L = bar * bars;
