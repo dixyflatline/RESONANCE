@@ -1093,15 +1093,21 @@
       const f = ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 1800; f.Q.value = 0.9;
       lfo(ctx, f.frequency, { L: m.L, cycles: 2, depth: 600 });
       f.connect(out); f.connect(verb.in(0.8));
-      m.forProg((chord, t, seg) => chord.slice(0, 4).forEach((n, i) =>
-        padVoice(ctx, f, { t, dur: seg, xf: 1.2, freq: mtof(m.root + n), detune: 8, gain: 0.05, pan: (i - 1.5) * 0.35 })));
+      /* Complexity: layer 0 holds the chord's 1st and 3rd listed tones, layer 1 adds the 2nd, layer 2 the 4th (a fuller chord as X rises) */
+      m.forProg((chord, t, seg) => chord.slice(0, 4).forEach((n, i) => {
+        if (!m.want([0, 1, 0, 2][i])) return;
+        padVoice(ctx, f, { t, dur: seg, xf: 1.2, freq: mtof(m.root + n), detune: 8, gain: 0.05, pan: (i - 1.5) * 0.35 });
+      }));
     },
 
     mbass(ctx, out, verb, m) {
       m.forProg((chord, t, seg) => {
-        padVoice(ctx, out, { t, dur: seg, xf: 0.25, freq: mtof(m.root - 12 + chord[0]), types: ['sine', 'triangle'], detune: 2, gain: 0.14 });
-        for (let b = 0; b < Math.round(seg / m.bar); b++)
-          pluck(ctx, out, { t: t + b * m.bar, freq: mtof(m.root - 12 + chord[0]), gain: 0.12, decay: 1.4, type: 'sine' });
+        /* Complexity: layer 0 the long note, layer 1 a pluck on every bar, layer 2 a softer pluck on the middle of every bar */
+        if (m.want(0)) padVoice(ctx, out, { t, dur: seg, xf: 0.25, freq: mtof(m.root - 12 + chord[0]), types: ['sine', 'triangle'], detune: 2, gain: 0.14 });
+        for (let b = 0; b < Math.round(seg / m.bar); b++) {
+          if (m.want(1)) pluck(ctx, out, { t: t + b * m.bar, freq: mtof(m.root - 12 + chord[0]), gain: 0.12, decay: 1.4, type: 'sine' });
+          if (m.want(2)) pluck(ctx, out, { t: t + (b + 0.5) * m.bar, freq: mtof(m.root - 12 + chord[0]), gain: 0.08, decay: 1.0, type: 'sine' });
+        }
       });
     },
 
@@ -1113,6 +1119,8 @@
         for (let s = 0; s < steps; s++) {
           let note = m.root + 24 + chord[pat[s % pat.length]] - (chord[pat[s % pat.length]] > 12 ? 12 : 0);
           if (m.ambient) { note = m.plan.fit(note, ci); if (note === null) continue; } // follows the ambient stems: fits under the plan
+          /* Complexity: layer 0 every other beat, layer 1 the beats in between, layer 2 the off-beat eighths */
+          if (!m.want(s % 4 === 0 ? 0 : s % 2 === 0 ? 1 : 2)) continue;
           pluck(ctx, bus, { t: t0 + s * m.beat / 2, freq: mtof(note), gain: s % 4 === 0 ? 0.15 : 0.1, decay: 1.1, pan: Math.sin(s) * 0.5 });
         }
       });
@@ -1272,7 +1280,7 @@
 
   /* Synths whose stems have a complexity control (melodic and rhythmic layers): rendered as three same-length loops that play in sync.
      Layer 0 is the sparse base, layers 1 and 2 add notes. The engine fades layers 1 and 2 in and out with the XY pad's X axis. */
-  const TIERED = new Set(['arp', 'bells', 'shimmer', 'melody', 'pulse', 'sub', 'beats']);
+  const TIERED = new Set(['arp', 'bells', 'shimmer', 'melody', 'pulse', 'sub', 'beats', 'marp', 'mchords', 'mbass']);
   const hasTiers = (synth) => TIERED.has(synth);
   /* Returns an AudioBuffer. With opts.tiers, the buffer is layer 0 and its `layers` property holds layers 1 and 2. */
   async function renderStem(opts) {

@@ -98,7 +98,8 @@
     drawQR(local && c.lanUrls.length ? c.lanUrls[0] : location.origin + '/');
     buildStemRows();
     if (packChanged && started) switchPack();
-    else if (kitChanged) swapKit(prevCfg);
+    else if (kitChanged && started) swapKit(prevCfg);
+    else if (kitChanged) curRev = cfg.pack.rev ?? 0; /* (an engine page that has not started has nothing to swap: it renders the new sounds when Start is pressed) */
     kitBar();
   }
 
