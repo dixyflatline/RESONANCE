@@ -565,6 +565,20 @@
     { name: 'Slow breath', w: 2, chord: [[0, 4.5, 'a'], [4.5, 3.5, 'c']] },
     { name: 'Octave bounce', w: 1, bar: [[0, 1, 'a'], [1.5, 1, 'o'], [3, 1, 'a']] },
     { name: 'Chord walk', w: 1, bar: [[0, 1.5, 'k'], [1.5, 1.5, 'k'], [3, 1, 'k']] },
+    { name: 'Push', w: 2, bar: [[0, 1.25, 'a'], [1.5, 1, 'c'], [2.5, 0.75, 'a'], [3.5, 0.5, 'c']] }, /* anticipations: notes land just before the beat */
+    { name: 'One-drop', w: 1, bar: [[1, 1.5, 'a'], [2.5, 0.75, 'c'], [3.5, 0.5, 'a']] }, /* nothing on the downbeat */
+    { name: 'Gallop', w: 1, bar: [[0, 0.75, 'a'], [0.75, 0.25, 'a'], [1.5, 0.75, 'c'], [2.25, 0.25, 'c'], [3, 0.75, 'a']] },
+    { name: 'Dotted', w: 1, bar: [[0, 1.5, 'a'], [1.5, 1.5, 'c'], [3, 0.5, 'a'], [3.5, 0.5, 'o']] },
+  ];
+  /* The Bass of the progression packs: the long note is layer 0; the hits of layers 1 and 2 follow a rhythm template. A hit is [beat, length in beats, layer, tone: 0 root, 1 3rd, 2 5th]. */
+  const MBASS_TPL = [
+    { name: 'Bar pluck', w: 3, h: [[0, 1.4, 1, 0], [2, 1, 2, 0]] }, /* the original */
+    { name: 'Push', w: 2, h: [[0, 1, 1, 0], [1.5, 0.5, 2, 0], [2.5, 1, 1, 2], [3.5, 0.5, 2, 0]] },
+    { name: 'Tresillo', w: 2, h: [[0, 1.5, 1, 0], [1.5, 1.5, 1, 2], [3, 1, 1, 0], [0.75, 0.5, 2, 0], [2.75, 0.25, 2, 1]] },
+    { name: 'Offbeat', w: 1, h: [[0, 1, 1, 0], [0.5, 0.5, 2, 0], [1.5, 0.5, 1, 0], [2.5, 0.5, 2, 2], [3.5, 0.5, 1, 0]] },
+    { name: 'One-drop', w: 1, h: [[2, 1.5, 1, 0], [1, 0.5, 2, 0], [3.5, 0.5, 2, 2]] },
+    { name: 'Gallop', w: 1, h: [[0, 0.75, 1, 0], [0.75, 0.25, 2, 0], [1.5, 0.75, 1, 2], [2.25, 0.25, 2, 0], [3, 0.75, 1, 0]] },
+    { name: 'Walk', w: 1, h: [[0, 1, 1, 0], [1, 1, 1, 1], [2, 1, 1, 2], [3, 1, 2, 1]] },
   ];
 
   function thump(ctx, dest, { t, gain = 0.6, f0 = 95, f1 = 42, decay = 0.45 }) {
@@ -1101,10 +1115,15 @@
         const pcOf = (n) => ((n % 12) + 12) % 12;
         m.forChords((chord, t0, seg, ci) => {
           const rr = mulberry32(hash(`${m.seed}:subtpl:${si}:${ci}`));
-          const pcs = chord.map(pcOf), soft = [...((m.plan.pad && m.plan.pad[ci]) || []), ...((m.plan.atmos && m.plan.atmos[ci]) || []), ...((m.plan.arp && m.plan.arp[ci]) || [])];
-          let anc = (m.plan.subNotes ? m.plan.subNotes(ci) : []).filter((n) => n < root + 8); if (!anc.length) anc = [root - 12];
-          const low = []; for (let n = root - 12; n <= root + 7; n++) if (pcs.includes(pcOf(n)) && !drone.some((h) => [1, 2].includes(Math.abs(n - h))) && !blocked(n, [], soft)) low.push(n);
-          const alt = low.filter((n) => !ladder.includes(n)), pool = [...new Set([...anc, ...low])].sort((x, y) => x - y);
+          const pcs = chord.slice(0, 3).map(pcOf), soft = [...((m.plan.pad && m.plan.pad[ci]) || []), ...((m.plan.atmos && m.plan.atmos[ci]) || []), ...((m.plan.arp && m.plan.arp[ci]) || [])];
+          /* Only the chord's root, 3rd and 5th (the safe notes of a bass): the root is the anchor, the 3rd and 5th are the alternatives. A note is dropped when it clashes with the drone or the upper parts; if that leaves nothing, the clash test is relaxed. */
+          const all = []; for (let n = root - 12; n <= root + 7; n++) if (pcs.includes(pcOf(n - root))) all.push(n); /* (the chord's tones are offsets from the key's tonic) */
+          let low = all.filter((n) => !drone.some((h) => [1, 2].includes(Math.abs(n - h))) && !blocked(n, [], soft));
+          if (!low.length) low = all.filter((n) => !drone.some((h) => [1, 2].includes(Math.abs(n - h))));
+          if (!low.length) low = all;
+          if (!low.some((n) => pcOf(n - root) === pcs[0])) low = [...low, ...all.filter((n) => pcOf(n - root) === pcs[0])]; /* the chord's own root is always allowed, even against the drone: it is what a bass should play */
+          let anc = low.filter((n) => pcOf(n - root) === pcs[0]); if (!anc.length) anc = low.slice(0, 1); if (!anc.length) anc = [root - 12];
+          const alt = low.filter((n) => pcOf(n - root) !== pcs[0]), pool = [...new Set([...anc, ...low])].sort((x, y) => x - y);
           const W = Math.round(seg / B); let kStep = 0;
           const evs = [];
           if (stpl.chord) evs.push(...stpl.chord.map(([b, d, k]) => [b, Math.min(d, W - b), k]));
@@ -1308,14 +1327,15 @@
 
     mbass(ctx, out, verb, m) {
       const voice = voiceOf(m, 'sub');
+      const forced = m.tpl ? MBASS_TPL.findIndex((x) => x.name === m.tpl) : -1, ti = forced >= 0 ? forced : pickW(m.mkRnd()(), MBASS_TPL.map((x) => x.w)), tpl = MBASS_TPL[ti]; m.tplName = tpl.name;
       const evs = [];
       m.forProg((chord, t, seg) => {
-        const n = m.root - 12 + chord[0];
-        /* Complexity: layer 0 the long note, layer 1 a pluck on every bar, layer 2 a softer pluck on the middle of every bar */
-        if (m.want(0)) evs.push({ t, d: seg, n, gain: 0.14, sus: true, lv: 0, line: 0, join: undefined });
-        for (let b = 0; b < Math.round(seg / m.bar); b++) {
-          if (m.want(1)) evs.push({ t: t + b * m.bar, d: Math.min(m.bar, 1.4), n, gain: 0.12, decay: 1.4, lv: 1, line: 1 });
-          if (m.want(2)) evs.push({ t: t + (b + 0.5) * m.bar, d: Math.min(m.bar / 2, 1.0), n, gain: 0.08, decay: 1.0, lv: 2, line: 2 });
+        const tone = (i) => m.root - 12 + chord[Math.min(i, 2)]; /* only the chord's root, 3rd and 5th */
+        /* Complexity: layer 0 the long note, layers 1 and 2 the hits of the rhythm template (the original: a pluck on every bar and one in the middle) */
+        if (m.want(0)) evs.push({ t, d: seg, n: tone(0), gain: 0.14, sus: true, lv: 0, line: 0, join: undefined });
+        for (let b = 0; b < Math.round(seg / m.bar); b++) for (const [beat, len, lv, ti2] of tpl.h) {
+          if (beat >= m.bpb || !m.want(lv)) continue;
+          evs.push({ t: t + b * m.bar + beat * m.beat, d: Math.min(len * m.beat, 1.4), n: tone(ti2), gain: lv === 1 ? 0.12 : 0.08, decay: Math.min(1.4, 0.5 + len * m.beat), lv, line: lv });
         }
       });
       playEvents(ctx, out, m, voice, evs, { lines: { 0: { gain: voice === 'acid' ? 0.06 : 0.09, pan: 0, slow: true }, 1: { gain: voice === 'acid' ? 0.05 : 0.07, pan: 0 }, 2: { gain: voice === 'acid' ? 0.04 : 0.05, pan: 0 } } });
