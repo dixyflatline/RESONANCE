@@ -60,6 +60,11 @@ if (!active) {
 // `active` is the live pack. When a kit swaps the Melodic / Rhythmic sounds, `active` becomes a copy of `activeBase` (the pack chosen in the pack browser)
 // with those groups' stems replaced; core synth and the nature samples are untouched and keep playing. The swap waits until the groups it changes are silent.
 let activeBase = active, activeKit = null, activePicks = {}, kitRev = 0;
+// Remembered adjustments per combination (kit + melodic template + rhythmic template): instrument pads, variations, Microcosm. Written by the engine.
+const SETTINGS_FILE = path.join(ROOT, 'state', 'settings.json');
+let settingsMem = {}; try { settingsMem = JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8')) || {}; } catch { /* none yet */ }
+const comboKey = (p) => [p.kit || '', p.melodic || '', p.rhythmic || ''].join('|');
+const currentSettings = () => settingsMem[comboKey(activePicks)] || null;
 let kitPending = null; // { kit, picks, roles, since, soundKit }: the swapped groups are fading out; the new sounds go in once they are silent
 
 // ---- State ---------------------------------------------------------------
@@ -254,7 +259,7 @@ const wss = new WebSocketServer({ server, path: '/ws', maxPayload: 1024 * 1024 }
 
 function publicConfig() {
   return {
-    pack: { id: active.id, name: active.name, description: active.description, rev: kitRev, kit: activeKit ? { id: activeKit.id, name: activeKit.name, micro: activeKit.micro || null } : null },
+    pack: { id: active.id, name: active.name, description: active.description, rev: kitRev, settings: currentSettings(), kit: activeKit ? { id: activeKit.id, name: activeKit.name, micro: activeKit.micro || null } : null },
     tempo: active.tempo, beatsPerBar: active.beatsPerBar, quantize: config.quantize,
     fade: config.fade, fadeIn: config.fadeIn, fadeOut: config.fadeOut, key: active.key, mode: active.mode, seed: active.seed,
     stems: active.stems, groups: (active.groups || []).map(publicGroup), lanUrls: lanUrls(), build: buildId(),
@@ -360,6 +365,14 @@ function handleInput(msg, source, sender) {
       return;
     }
     case 'kit': if (source !== 'client') requestKit(msg, source); return; // load a kit (engine / sensor / HTTP only)
+    case 'settingsSave': { // the engine remembers the adjustments made on the live kit + templates (engine / HTTP only)
+      if (source === 'client' || Number(msg.rev) !== kitRev || !msg.settings || typeof msg.settings !== 'object') return;
+      const body = JSON.stringify(msg.settings);
+      if (body.length > 60000) return;
+      settingsMem[comboKey(activePicks)] = JSON.parse(body);
+      try { fs.mkdirSync(path.dirname(SETTINGS_FILE), { recursive: true }); fs.writeFileSync(SETTINGS_FILE, JSON.stringify(settingsMem, null, 1)); } catch (e) { log('could not save settings: ' + e.message); }
+      return;
+    }
     case 'kitSave': { // save what is live as a kit file (engine / HTTP only)
       if (source === 'client') return;
       const k = Kits.saveKit(FAV_DIR, { name: msg.name, description: msg.description, kit: activePicks.kit, melodic: activePicks.melodic, rhythmic: activePicks.rhythmic, micro: msg.micro });

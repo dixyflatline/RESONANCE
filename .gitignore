@@ -6,3 +6,4 @@ packs/*/*.wav
 _to_delete/
 stems/
 *.log
+state/

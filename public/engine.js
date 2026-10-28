@@ -180,7 +180,7 @@
 
   function onXY(id, p) {
     xyState[id] = { x: p.x ?? ResonanceXY.XY_DEFAULT.x, y: p.y ?? ResonanceXY.XY_DEFAULT.y, v: p.v ?? ResonanceXY.XY_DEFAULT.v };
-    applyXY(id);
+    applyXY(id); saveSettingsSoon();
     const mini = document.querySelector(`.stemrow[data-id="${id}"] .xy-mini`);
     if (mini) mini.setXY(xyState[id]);
     if (sheet) sheet.update(id, xyState[id]);
@@ -231,7 +231,7 @@
   let fxTab = 'a';
   const KN = ['activity', 'size', 'repeats', 'tone', 'mix'];
   const serSlot = (x) => ({ preset: x.micro.preset, on: x.micro.enabled, knobs: x.micro.knobs, src: x.names, muteDry: x.muteDry });
-  function keepMicro() { try { localStorage.setItem('resonance.micro2', JSON.stringify({ tab: fxTab, ...Object.fromEntries(slotList().map((x) => [x.def.key, serSlot(x)])) })); } catch { /* storage unavailable */ } }
+  function keepMicro() { saveSettingsSoon(); try { localStorage.setItem('resonance.micro2', JSON.stringify({ tab: fxTab, ...Object.fromEntries(slotList().map((x) => [x.def.key, serSlot(x)])) })); } catch { /* storage unavailable */ } }
   function wireFx(st) { /* every stem gets a send into each box and a gain on its dry path, so any of them can be a source */
     st.fxSends = {};
     for (const x of slotList()) { const g = ctx.createGain(); g.gain.value = 0; st.xyGain.connect(g); g.connect(x.micro.input); st.fxSends[x.def.key] = g; }
@@ -293,6 +293,32 @@
     fillFxSources(); keepMicro();
   }
   const microNow = () => Object.fromEntries(slotList().map((x) => [x.def.key, serSlot(x)]));
+
+  // ---- Remembered adjustments: what you changed after loading a kit + templates comes back the next time the same combination is loaded ----
+  // (instrument pads, per-instrument variations and the Microcosm boxes; the server keeps them per kit|melodic|rhythmic in state/settings.json)
+  let settingsReady = false, settingsTimer = null;
+  const kitStems = () => cfg.stems.filter((d) => d.group === 'melodic' || d.group === 'rhythmic');
+  function settingsNow() {
+    const st = {};
+    for (const d of kitStems()) { const p = xyState[d.id]; const o = {}; if (p) { o.x = p.x; o.y = p.y; o.v = p.v; } if (varSeed.has(d.id)) o.seed = varSeed.get(d.id); if (Object.keys(o).length) st[d.name] = o; }
+    return { stems: st, micro: slotList().length ? microNow() : null };
+  }
+  function saveSettingsSoon() {
+    if (!settingsReady || !started) return;
+    clearTimeout(settingsTimer);
+    settingsTimer = setTimeout(() => { if (settingsReady && cfg.pack) send({ type: 'settingsSave', rev: cfg.pack.rev ?? 0, settings: settingsNow() }); }, 1500);
+  }
+  function settingsSeeds(defs) { /* before the stems render: their remembered variation seeds */
+    const sv = cfg.pack && cfg.pack.settings && cfg.pack.settings.stems; if (!sv) return;
+    for (const d of defs) if ((d.group === 'melodic' || d.group === 'rhythmic') && sv[d.name] && sv[d.name].seed != null) varSeed.set(d.id, sv[d.name].seed);
+  }
+  function settingsPads(defs) { /* after they are built: the pads, and the Microcosm boxes */
+    const sv = cfg.pack && cfg.pack.settings && cfg.pack.settings.stems;
+    if (sv) for (const d of defs) {
+      const o = (d.group === 'melodic' || d.group === 'rhythmic') && sv[d.name]; if (!o || o.x == null) continue;
+      xyState[d.id] = { x: o.x, y: o.y, v: o.v }; applyXY(d.id); send({ type: 'xy', stem: d.id, x: o.x, y: o.y, v: o.v });
+    }
+  }
   function initMicroUI() {
     let saved = {};
     try { saved = JSON.parse(localStorage.getItem('resonance.micro2') || 'null'); } catch { /* storage unavailable */ }
@@ -469,9 +495,11 @@
     createStemNodes();
     if (slotList().length) initMicroUI();
     initLiveUI();
+    settingsSeeds(cfg.stems);
     setBuffers(await loadAll());
     stale = false; t0 = ctx.currentTime + 0.1;
     started = true; showSong();
+    setTimeout(() => { if (cfg.pack && cfg.pack.settings) { settingsPads(cfg.stems); if (cfg.pack.settings.micro && slotList().length) applyKitMicro(cfg.pack.settings.micro); } settingsReady = true; }, 600);
     $('#gate').hidden = true;
     setInterval(clockLoop, 15);
     requestAnimationFrame(draw);
@@ -512,22 +540,25 @@
       const was = new Map(prev.stems.map((d) => [d.id, JSON.stringify(d)]));
       const fresh = cfg.stems.filter((d) => was.get(d.id) !== JSON.stringify(d));
       const gone = prev.stems.filter((d) => !cfg.stems.some((x) => x.id === d.id) || fresh.some((x) => x.id === d.id));
+      settingsReady = false; clearTimeout(settingsTimer);
       for (const d of gone) { varSeed.delete(d.id); const st = stems.get(d.id); if (st) { if (st.voice) { stopVoice(st.voice, ctx.currentTime + LEAD, st); st.voice = null; } dropStemNodes(st); stems.delete(d.id); } delete xyState[d.id]; }
       curRev = cfg.pack.rev ?? 0;
       toast('kit', 'work', `Loading ${cfg.pack.kit ? cfg.pack.kit.name : 'new sounds'}…`);
       for (const d of fresh) { if (xyState[d.id] === undefined) delete xyState[d.id]; makeStemNodes(d); }
       for (const d of fresh) applyXY(d.id);
       if (sheet) sheet.close();
+      settingsSeeds(fresh);
       const defs = fresh;
       if (defs.length) setBuffers(await loadAll(cfg.tempo, defs));
       buildStemRows(); applyFx();
-      const m = cfg.pack.kit && cfg.pack.kit.micro; if (m) applyKitMicro(m);
+      settingsPads(fresh);
+      const sm = cfg.pack.settings && cfg.pack.settings.micro, m = sm || (cfg.pack.kit && cfg.pack.kit.micro); if (m) applyKitMicro(m);
       toast('kit', 'ok', `✓ ${cfg.pack.kit ? cfg.pack.kit.name : 'Sounds'} is live`);
     } catch (err) {
       console.error('kit swap failed', err);
       toast('kit', 'err', `Could not load ${cfg.pack.kit ? cfg.pack.kit.name : 'the sounds'}: ${err && err.message || err}. Reload this page (Cmd+Shift+R) and restart the server.`);
       try { buildStemRows(); applyFx(); } catch (e) {}
-    } finally { switching = false; }
+    } finally { switching = false; settingsReady = true; }
     reconcile(); renderRows(); kitBar();
   }
 
@@ -863,7 +894,7 @@
     const def = cfg.stems.find((d) => d.id === id); if (!def || def.file) return;
     const had = varSeed.has(id), prev = varSeed.get(id);
     varSeed.set(id, 1 + Math.floor(Math.random() * 999999));
-    if (!(await regenerate(cfg.tempo, `New variation: ${def.name}`, btn, def))) { if (had) varSeed.set(id, prev); else varSeed.delete(id); }
+    if (!(await regenerate(cfg.tempo, `New variation: ${def.name}`, btn, def))) { if (had) varSeed.set(id, prev); else varSeed.delete(id); } else saveSettingsSoon();
   }
   function setBuf(st, buf, delayMs = 0) { /* a rendered stem with complexity carries its two extra layers on the buffer, and its notes for the phones' piano roll */
     st.buffer = buf; st.layers = buf.layers || []; st.roll = buf.roll || null;
@@ -948,7 +979,7 @@
       rollView: rollViewFor,
       onVariation: varyStem, canVary: (def) => !def.file,
       onToggle: (id) => send({ type: 'toggle', stem: id }),
-      onLocal: (id, p) => { xyState[id] = { ...p }; applyXY(id); const m = document.querySelector(`.stemrow[data-id="${id}"] .xy-mini`); if (m) m.setXY(xyState[id]); },
+      onLocal: (id, p) => { xyState[id] = { ...p }; applyXY(id); saveSettingsSoon(); const m = document.querySelector(`.stemrow[data-id="${id}"] .xy-mini`); if (m) m.setXY(xyState[id]); },
     });
     renderRows();
   }
@@ -1330,7 +1361,7 @@
   $('#vol').addEventListener('input', (e) => master && master.gain.setTargetAtTime(Number(e.target.value), ctx.currentTime, 0.05));
   $('#bright').addEventListener('input', (e) => send({ type: 'param', name: 'brightness', value: Number(e.target.value) }));
   $('#stopAll').addEventListener('click', () => { const n = [...stems.values()].filter((s) => s.voice).length; send({ type: 'stopAll' }); if (n) { pendingStop = true; clearTimeout(stopTimer); stopTimer = setTimeout(() => { if (pendingStop) endStop('Stop finished'); }, 90000); toast('stop', 'work', `Stopping ${n} stem${n > 1 ? 's' : ''}, leaving in order, one group per bar…`); btnState($('#stopAll'), 'Stopping…', 'work'); } else toast('stop', 'ok', '✓ Nothing was playing'); });
-  $('#regen').addEventListener('click', async () => { const k = $('#key').value, s0 = seed; key = k; varSeed.clear(); seed = Math.floor(Math.random() * 1e6); if (!(await regenerate(cfg.tempo, 'New variation', $('#regen')))) seed = s0; });
+  $('#regen').addEventListener('click', async () => { const k = $('#key').value, s0 = seed; key = k; varSeed.clear(); seed = Math.floor(Math.random() * 1e6); if (!(await regenerate(cfg.tempo, 'New variation', $('#regen')))) seed = s0; else saveSettingsSoon(); });
   $('#key').addEventListener('change', async () => { const prev = key; key = $('#key').value; if (!(await regenerate(cfg.tempo, `Key ${key}`, $('#key')))) { key = prev; $('#key').value = prev; } });
   $('#export').addEventListener('click', () => {
     let n = 0; toast('exp', 'work', 'Exporting WAV loops…'); btnState($('#export'), 'Exporting…', 'work');
@@ -1353,6 +1384,6 @@
   }
 
   // Expose a tiny debug surface (used by automated tests).
-  window.__engine = { get ctx() { return ctx; }, get slots() { return slots; }, get micro() { return slots.a && slots.a.micro; }, get t0() { return t0; }, stems, beatLen, barLen, nextBoundary, get cfg() { return cfg; } };
+  window.__engine = { get ctx() { return ctx; }, get slots() { return slots; }, get micro() { return slots.a && slots.a.micro; }, get t0() { return t0; }, stems, xyState, varSeed, settingsNow, beatLen, barLen, nextBoundary, get cfg() { return cfg; } };
   connect();
 })();
