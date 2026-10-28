@@ -76,7 +76,7 @@
     cfg.tempo = cfg.tempo;
     $('#packName').textContent = c.pack ? c.pack.name : '–';
     if (packChanged) {
-      for (const k of Object.keys(xyState)) delete xyState[k]; // the new pack's pads start at their defaults
+      for (const k of Object.keys(xyState)) delete xyState[k]; for (const k of Object.keys(keptXY)) delete keptXY[k]; // the new pack's pads start at their defaults
       if (sheet) sheet.close();
       if (!$('#packs').hidden) loadPackList();
     }
@@ -180,7 +180,7 @@
 
   function onXY(id, p) {
     xyState[id] = { x: p.x ?? ResonanceXY.XY_DEFAULT.x, y: p.y ?? ResonanceXY.XY_DEFAULT.y, v: p.v ?? ResonanceXY.XY_DEFAULT.v };
-    applyXY(id); saveSettingsSoon();
+    applyXY(id);
     const mini = document.querySelector(`.stemrow[data-id="${id}"] .xy-mini`);
     if (mini) mini.setXY(xyState[id]);
     if (sheet) sheet.update(id, xyState[id]);
@@ -297,10 +297,11 @@
   // ---- Remembered adjustments: what you changed after loading a kit + templates comes back the next time the same combination is loaded ----
   // (instrument pads, per-instrument variations and the Microcosm boxes; the server keeps them per kit|melodic|rhythmic in state/settings.json)
   let settingsReady = false, settingsTimer = null;
+  const keptXY = {}; // id -> the pad as YOU left it (pad window or a restore); moves by phones, the audience simulator or sensors are never remembered
   const kitStems = () => cfg.stems.filter((d) => d.group === 'melodic' || d.group === 'rhythmic');
   function settingsNow() {
     const st = {};
-    for (const d of kitStems()) { const p = xyState[d.id]; const o = {}; if (p) { o.x = p.x; o.y = p.y; o.v = p.v; } if (varSeed.has(d.id)) o.seed = varSeed.get(d.id); if (Object.keys(o).length) st[d.name] = o; }
+    for (const d of kitStems()) { const p = keptXY[d.id]; const o = {}; if (p) { o.x = p.x; o.y = p.y; o.v = p.v; } if (varSeed.has(d.id)) o.seed = varSeed.get(d.id); if (Object.keys(o).length) st[d.name] = o; }
     return { stems: st, micro: slotList().length ? microNow() : null };
   }
   function saveSettingsSoon() {
@@ -316,7 +317,7 @@
     const sv = cfg.pack && cfg.pack.settings && cfg.pack.settings.stems;
     if (sv) for (const d of defs) {
       const o = (d.group === 'melodic' || d.group === 'rhythmic') && sv[d.name]; if (!o || o.x == null) continue;
-      xyState[d.id] = { x: o.x, y: o.y, v: o.v }; applyXY(d.id); send({ type: 'xy', stem: d.id, x: o.x, y: o.y, v: o.v });
+      xyState[d.id] = { x: o.x, y: o.y, v: o.v }; keptXY[d.id] = { x: o.x, y: o.y, v: o.v }; applyXY(d.id); send({ type: 'xy', stem: d.id, x: o.x, y: o.y, v: o.v });
     }
   }
   function initMicroUI() {
@@ -541,7 +542,7 @@
       const fresh = cfg.stems.filter((d) => was.get(d.id) !== JSON.stringify(d));
       const gone = prev.stems.filter((d) => !cfg.stems.some((x) => x.id === d.id) || fresh.some((x) => x.id === d.id));
       settingsReady = false; clearTimeout(settingsTimer);
-      for (const d of gone) { varSeed.delete(d.id); const st = stems.get(d.id); if (st) { if (st.voice) { stopVoice(st.voice, ctx.currentTime + LEAD, st); st.voice = null; } dropStemNodes(st); stems.delete(d.id); } delete xyState[d.id]; }
+      for (const d of gone) { delete keptXY[d.id]; varSeed.delete(d.id); const st = stems.get(d.id); if (st) { if (st.voice) { stopVoice(st.voice, ctx.currentTime + LEAD, st); st.voice = null; } dropStemNodes(st); stems.delete(d.id); } delete xyState[d.id]; }
       curRev = cfg.pack.rev ?? 0;
       toast('kit', 'work', `Loading ${cfg.pack.kit ? cfg.pack.kit.name : 'new sounds'}…`);
       for (const d of fresh) { if (xyState[d.id] === undefined) delete xyState[d.id]; makeStemNodes(d); }
@@ -979,7 +980,7 @@
       rollView: rollViewFor,
       onVariation: varyStem, canVary: (def) => !def.file,
       onToggle: (id) => send({ type: 'toggle', stem: id }),
-      onLocal: (id, p) => { xyState[id] = { ...p }; applyXY(id); saveSettingsSoon(); const m = document.querySelector(`.stemrow[data-id="${id}"] .xy-mini`); if (m) m.setXY(xyState[id]); },
+      onLocal: (id, p) => { xyState[id] = { ...p }; keptXY[id] = { ...p }; applyXY(id); saveSettingsSoon(); const m = document.querySelector(`.stemrow[data-id="${id}"] .xy-mini`); if (m) m.setXY(xyState[id]); },
     });
     renderRows();
   }
