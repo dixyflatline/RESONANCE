@@ -82,8 +82,14 @@
   // tone or tritone away from D or A is a clash too. A note is lifted by octaves until it fits, or dropped.
   const PRIORITY = ['drone', 'pulse', 'sub', 'pad', 'atmos', 'arp', 'melody'];
   const LOW = 55;
+  // Roughness in Hz: two tones beat when they are closer than about a third of a critical band, and the band is wide in the bass (a second at D2 is
+  // mud, the same second at E6 is a shimmer). This is what the ear hears, so it is the test used to keep parts from rubbing.
+  const hzOf = (n) => 440 * Math.pow(2, (n - 69) / 12);
+  const cbwOf = (f) => 25 + 75 * Math.pow(1 + 1.4 * Math.pow(f / 1000, 2), 0.69);
+  const rubs = (a, b, band = 0.33) => { if (a === b) return false; const fa = hzOf(a), fb = hzOf(b), r = Math.abs(fa - fb) / cbwOf((fa + fb) / 2); return r > 0.03 && r < band; };
+  const clearOf = (n, list) => !list.some((h) => h !== n && (Math.abs(n - h) <= 2 || rubs(n, h)));
   const conflict = (m, h, shield) => {
-    const d = Math.abs(m - h); if (!d) return false; if (d <= 2) return true;
+    const d = Math.abs(m - h); if (!d) return false; if (d <= 2 || rubs(m, h)) return true;
     const ic = d % 12;
     if (m < LOW && h < LOW && ic !== 0 && ic !== 7) return true;
     return !!shield && d < 20 && [1, 2, 6, 10, 11].includes(ic);
@@ -93,6 +99,17 @@
     if (shield.some((h) => conflict(m, h, true))) return true;
     return soft.some((h) => h !== m && conflict(m, h, false));
   };
+  // The Shimmer's notes for one chord (the Bells read them too, so the two never sit a semitone apart): each note must not rub with the arp's notes
+  // or the notes already placed; otherwise it moves an octave or is left out. [{ sn: midi or null, lv: complexity layer, up }]
+  function shimmerSet(m, chord, ci) {
+    const arpT = (m.plan.arp && m.plan.arp[ci]) || [], placed = [...arpT, ...arpT.map((x) => x + 12)], out = []; /* (the arp now and then plays a tone an octave up) */
+    for (const [n, lv, up] of [[chord[1], 0, 0], [chord[2], 1, 0], [chord[4] ?? chord[3], 2, 0], [chord[1], 2, 12]]) {
+      let sn = m.plan.fit(m.root + (m.custom ? 12 : 24) + n + up, ci);
+      if (sn !== null && m.rules.upperRub && !clearOf(sn, placed)) sn = [sn + 12, sn - 12].find((x) => clearOf(x, placed) && m.plan.okAbove(x, ci)) ?? null;
+      out.push({ sn, lv, up }); if (sn !== null) placed.push(sn);
+    }
+    return out;
+  }
   const place = (m0, shield, soft) => { for (let k = 0; k < 3; k++) if (!blocked(m0 + 12 * k, shield, soft)) return m0 + 12 * k; return null; };
 
   // The Sub's long, spare, blooming line. segs = [{ base: start in beats, W: length in beats, a0, a1: ladder indices of its anchor notes }].
@@ -1098,24 +1115,29 @@
       };
       /* Complexity: layer 0 is one long note per chord (the original sound). Layers 1 and 2 make the bass pulse on the bar's root:
          layer 1 a soft pulse on every beat (quarter notes), layer 2 the pulses in between (eighth notes). The pulses are short, with a touch of the octave above so they carry on small speakers. */
+      /* A Sub that follows the melodic template's chords pulses on each bar's own chord root (not on the ambient plan's D and A, which rub against the Bass and the Chords). */
+      const ownAll = !!(m.follow && m.rules.followProg && !strict), barRoot = [];
+      if (ownAll) m.forProg((chord, t0, seg) => { const pc = (((chord[0]) % 12) + 12) % 12; let r = m.root - 12; for (let n = m.root - 12; n <= m.root + 7; n++) if ((((n - m.root) % 12) + 12) % 12 === pc) { r = n; break; } for (let q = Math.round(t0 / m.bar); q < Math.round((t0 + seg) / m.bar); q++) barRoot[q] = r; });
+      const oct = m.rules.subOctave !== false; /* (the kit rule subOctave: the quiet octave above the pulses, which can rub against a melody that sits just above the Sub) */
       const extras = () => {
         for (let b = 0; b < nBars; b++) {
-          const root = m.plan.sub[b % m.plan.sub.length], t0 = b * m.bar;
+          const root = ownAll && barRoot[b] != null ? barRoot[b] : m.plan.sub[b % m.plan.sub.length], t0 = b * m.bar;
           for (let k = 0; k < m.bpb; k++) {
             const acc = k === 0 ? 1 : 0.8;
-            if (m.want(1)) { pluck(ctx, f, { t: t0 + k * B, freq: mtof(root), gain: 0.7 * acc, decay: 0.55, type: 'sine' }); pluck(ctx, f, { t: t0 + k * B, freq: mtof(root + 12), gain: 0.25 * acc, decay: 0.35, type: 'sine' }); }
-            if (m.want(2)) { pluck(ctx, f, { t: t0 + (k + 0.5) * B, freq: mtof(root), gain: 0.5, decay: 0.35, type: 'sine' }); pluck(ctx, f, { t: t0 + (k + 0.5) * B, freq: mtof(root + 12), gain: 0.18, decay: 0.25, type: 'sine' }); }
+            if (m.want(1)) { pluck(ctx, f, { t: t0 + k * B, freq: mtof(root), gain: 0.7 * acc, decay: 0.55, type: 'sine' }); if (oct) pluck(ctx, f, { t: t0 + k * B, freq: mtof(root + 12), gain: 0.25 * acc, decay: 0.35, type: 'sine' }); }
+            if (m.want(2)) { pluck(ctx, f, { t: t0 + (k + 0.5) * B, freq: mtof(root), gain: 0.5, decay: 0.35, type: 'sine' }); if (oct) pluck(ctx, f, { t: t0 + (k + 0.5) * B, freq: mtof(root + 12), gain: 0.18, decay: 0.25, type: 'sine' }); }
           }
         }
       };
       const forcedS = m.tpl ? SUB_TPL.findIndex((x) => x.name === m.tpl) : -1; /* a rhythmic template names the groove; otherwise the seed picks one */
       const si = strict || m.bpb !== 4 ? 0 : forcedS >= 0 ? forcedS : pickW(m.mkRnd()(), SUB_TPL.map((x) => x.w)), stpl = SUB_TPL[si]; m.tplName = strict ? 'Strict' : stpl.name;
-      if (si > 0) { /* a rhythm template: the notes are the anchors (D / A) or chord tones in the Sub's own range that do not clash with the drone's pitches or the pad, atmos and arp notes of that chord */
+      if (si > 0 || ownAll) { /* a rhythm template (or, for a Sub that follows the melodic chords, the long line too): the notes are the anchors (D / A) or chord tones in the Sub's own range that do not clash with the drone's pitches or the pad, atmos and arp notes of that chord */
         const root = m.root, ladder = m.plan.ladder || [root - 12, root - 5, root, root + 7], drone = m.plan.drone || [root - 12, root - 5, root];
         const pcOf = (n) => ((n % 12) + 12) % 12;
-        m.forChords((chord, t0, seg, ci) => {
+        const split = m.rules.lowSplit && m.with && m.with.bass, ownChords = m.follow && m.rules.followProg; /* (see the kit rules: with a Bass, the Sub keeps to root and fifth; it plays the melodic template's chords) */
+        (ownChords ? m.forProg.bind(m) : m.forChords.bind(m))((chord, t0, seg, ci) => {
           const rr = mulberry32(hash(`${m.seed}:subtpl:${si}:${ci}`));
-          const pcs = chord.slice(0, 3).map(pcOf), soft = [...((m.plan.pad && m.plan.pad[ci]) || []), ...((m.plan.atmos && m.plan.atmos[ci]) || []), ...((m.plan.arp && m.plan.arp[ci]) || [])];
+          const pcs = (split ? [chord[0], chord[2] ?? chord[0] + 7] : chord.slice(0, 3)).map(pcOf), soft = ownChords && !m.ambient ? [] : [...((m.plan.pad && m.plan.pad[ci]) || []), ...((m.plan.atmos && m.plan.atmos[ci]) || []), ...((m.plan.arp && m.plan.arp[ci]) || [])];
           /* Only the chord's root, 3rd and 5th (the safe notes of a bass): the root is the anchor, the 3rd and 5th are the alternatives. A note is dropped when it clashes with the drone or the upper parts; if that leaves nothing, the clash test is relaxed. */
           const all = []; for (let n = root - 12; n <= root + 7; n++) if (pcs.includes(pcOf(n - root))) all.push(n); /* (the chord's tones are offsets from the key's tonic) */
           let low = all.filter((n) => !drone.some((h) => [1, 2].includes(Math.abs(n - h))) && !blocked(n, [], soft));
@@ -1126,7 +1148,8 @@
           const alt = low.filter((n) => pcOf(n - root) !== pcs[0]), pool = [...new Set([...anc, ...low])].sort((x, y) => x - y);
           const W = Math.round(seg / B); let kStep = 0;
           const evs = [];
-          if (stpl.chord) evs.push(...stpl.chord.map(([b, d, k]) => [b, Math.min(d, W - b), k]));
+          if (si === 0) evs.push([0, W, 'a']); /* Long line: one long root per chord */
+          else if (stpl.chord) evs.push(...stpl.chord.map(([b, d, k]) => [b, Math.min(d, W - b), k]));
           else for (let bar = 0; bar < Math.floor(W / m.bpb); bar++) for (const [b, d, k] of stpl.bar) evs.push([bar * m.bpb + b, d, k]);
           for (const [b, d, kind] of evs) {
             const r1 = rr(), r2 = rr(), a0 = anc[Math.floor(r1 * anc.length)];
@@ -1301,7 +1324,9 @@
           const beatPos = Math.floor(m.rnd() * Math.round(seg / m.beat));
           const n = tones[Math.floor(m.rnd() * tones.length)] ?? 0;
           const half = m.rnd() < 0.3, g = m.rnd(), pn = m.rnd(), lv = k === 0 ? 0 : k < 4 ? 1 : 2;
-          const bn = m.plan.fit(m.root + (m.custom ? 12 : 24) + n, ci), bt = t0 + beatPos * m.beat + (half ? m.beat / 2 : 0); if (bn === null) continue;
+          let bn = m.plan.fit(m.root + (m.custom ? 12 : 24) + n, ci);
+          if (bn !== null && m.rules.upperRub) { const arpT = (m.plan.arp && m.plan.arp[ci]) || [], others = [...arpT, ...arpT.map((x) => x + 12), ...shimmerSet(m, chord, ci).map((e) => e.sn).filter((x) => x !== null)]; if (!clearOf(bn, others)) bn = [bn + 12, bn - 12].find((x) => clearOf(x, others) && m.plan.okAbove(x, ci)) ?? null; }
+          const bt = t0 + beatPos * m.beat + (half ? m.beat / 2 : 0); if (bn === null) continue;
           gated(m, lv, [1.6, 5, 9], (decay, mul, attack) => bell(ctx, bus, { t: bt, freq: mtof(bn), gain: (lv === 2 ? 0.055 + g * 0.04 : 0.07 + g * 0.05) * mul, decay, attack, pan: (pn - 0.5) * 1.2 }));
         }
       });
@@ -1330,7 +1355,8 @@
       const forced = m.tpl ? MBASS_TPL.findIndex((x) => x.name === m.tpl) : -1, ti = forced >= 0 ? forced : pickW(m.mkRnd()(), MBASS_TPL.map((x) => x.w)), tpl = MBASS_TPL[ti]; m.tplName = tpl.name;
       const evs = [];
       m.forProg((chord, t, seg) => {
-        const tone = (i) => m.root - 12 + chord[Math.min(i, 2)]; /* only the chord's root, 3rd and 5th */
+        const split = m.rules.lowSplit && m.with && m.with.sub; /* with a Sub in the same register, a 3rd would rub against its root: the Bass keeps to root and fifth then */
+        const tone = (i) => m.root - 12 + chord[split && i === 1 ? 0 : Math.min(i, 2)]; /* only the chord's root, 3rd and 5th */
         /* Complexity: layer 0 the long note, layers 1 and 2 the hits of the rhythm template (the original: a pluck on every bar and one in the middle) */
         if (m.want(0)) evs.push({ t, d: seg, n: tone(0), gain: 0.14, sus: true, lv: 0, line: 0, join: undefined });
         for (let b = 0; b < Math.round(seg / m.bar); b++) for (const [beat, len, lv, ti2] of tpl.h) {
@@ -1395,8 +1421,7 @@
       level.connect(eg).connect(echo); echo.connect(elp).connect(efb).connect(echo); elp.connect(out);
       /* Complexity: layer 0 is one chord tone, layer 1 adds a second, layer 2 the third plus the first an octave up. */
       m.forChords((chord, t, seg, ci) => {
-        const tone = (n, lv, up = 0) => { if (!m.want(lv)) return; const sn = m.plan.fit(m.root + (m.custom ? 12 : 24) + n + up, ci); if (sn === null) return; padVoice(ctx, bus, { t, dur: seg, xf: 0.5, freq: mtof(sn), types: ['sawtooth', 'sawtooth', 'square'], detune: 6, gain: up ? 0.2 : 0.3, pan: 0 }); };
-        tone(chord[1], 0); tone(chord[2], 1); tone(chord[4] ?? chord[3], 2); tone(chord[1], 2, 12);
+        for (const { sn, lv, up } of shimmerSet(m, chord, ci)) { if (sn === null || !m.want(lv)) continue; padVoice(ctx, bus, { t, dur: seg, xf: 0.5, freq: mtof(sn), types: ['sawtooth', 'sawtooth', 'square'], detune: 6, gain: up ? 0.2 : 0.3, pan: 0 }); }
       });
     },
   };
@@ -1494,6 +1519,7 @@
       },
       forChords(fn) { if (custom) { custom.chords.forEach((c, i) => fn(prog[i], c.start * bar, c.len * bar, i)); return; } const n = Math.max(1, Math.round(L / seg)); for (let i = 0; i < n; i++) fn(CHORDS[i % 4], i * seg, seg, i % 4); },
     };
+    m.rules = { lowSplit: true, followProg: true, upperRub: true, subOctave: true, ...(opts.rules || {}) }; m.with = opts.with || null; m.follow = !!opts.follow; /* the kit's note rules, which other stems share the low register, and a Sub that plays the melodic template's chords */
     m.voice = opts.voice || null; m.sample = opts.voiceSample || null; m.tpl = opts.tpl || null; /* the stem's voice (see playEvents), its recorded note, and a forced rhythm template (Pulse / Sub) */
     m.seed = seed; m.id = id; m.samples = opts.samples || {}; m.pattern = opts.pattern || null; /* beats: the decoded one-shots and the pack's patterns */
     build(ctx, out, verb, m);

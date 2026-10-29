@@ -2,6 +2,12 @@
   "name": "Pluck garden",
   "description": "Everything plucked: plucked chords, bass and arp, with a pluck lead and a bell second melody.",
   "order": 4,
+  "rules": {
+    "lowSplit": true,
+    "followProg": true,
+    "upperRub": true,
+    "subOctave": false
+  },
   "voices": {
     "chords": "pluck",
     "bass": "pluck",

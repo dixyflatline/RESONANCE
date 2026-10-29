@@ -2,6 +2,12 @@
   "name": "Glass",
   "description": "Bells and plucks: a pad under bell arp and bell melody, a plucked second melody.",
   "order": 2,
+  "rules": {
+    "lowSplit": true,
+    "followProg": true,
+    "upperRub": true,
+    "subOctave": false
+  },
   "voices": {
     "chords": "pad",
     "bass": "sub",

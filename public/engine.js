@@ -539,7 +539,9 @@
     switching = true;
     try {
       const was = new Map(prev.stems.map((d) => [d.id, JSON.stringify(d)]));
-      const fresh = cfg.stems.filter((d) => was.get(d.id) !== JSON.stringify(d));
+      const partners = (c) => (c.stems.some((x) => x.synth === 'mbass') ? 'b' : '') + (c.stems.some((x) => x.synth === 'sub') ? 's' : '');
+      const sharing = partners(prev) !== partners(cfg); /* a Bass or Sub came or went: the other renders again, as they share the low register */
+      const fresh = cfg.stems.filter((d) => was.get(d.id) !== JSON.stringify(d) || (sharing && (d.synth === 'mbass' || d.synth === 'sub')));
       const gone = prev.stems.filter((d) => !cfg.stems.some((x) => x.id === d.id) || fresh.some((x) => x.id === d.id));
       settingsReady = false; clearTimeout(settingsTimer);
       for (const d of gone) { delete keptXY[d.id]; varSeed.delete(d.id); const st = stems.get(d.id); if (st) { if (st.voice) { stopVoice(st.voice, ctx.currentTime + LEAD, st); st.voice = null; } dropStemNodes(st); stems.delete(d.id); } delete xyState[d.id]; }
@@ -633,7 +635,7 @@
           const samples = def.synth === 'beats' ? await loadVoices(def) : undefined;
           const voiceSample = def.voice === 'sample' && def.voiceUrl ? { buf: await oneShot(def.voiceUrl), root: def.voiceRoot, gain: def.voiceGain, loop: def.voiceLoop } : undefined; /* a kit's recorded voice */
           buf = await ResonanceSynth.renderStem({
-            voice: def.voice, voiceSample, tpl: def.tpl, samples, pattern: def.synth === 'beats' ? { voices: def.voices, tiers: def.tiers, steps: def.steps } : undefined,
+            voice: def.voice, voiceSample, tpl: def.tpl, rules: def.rules, follow: !!def.follow, with: { bass: cfg.stems.some((x) => x.synth === 'mbass'), sub: cfg.stems.some((x) => x.synth === 'sub') }, samples, pattern: def.synth === 'beats' ? { voices: def.voices, tiers: def.tiers, steps: def.steps } : undefined,
             synth: def.synth, id: def.id, sampleRate: ctx.sampleRate, tempo,
             beatsPerBar: cfg.beatsPerBar, bars: def.bars || 8, key, mode: cfg.mode, progression: def.progression, style: def.style, seed: varSeed.has(def.id) ? varSeed.get(def.id) : seed, planSeed: seed, custom, lush, tiers: !!def.complexity,
           });

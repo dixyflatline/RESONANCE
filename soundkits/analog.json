@@ -2,6 +2,12 @@
   "name": "Analog",
   "description": "Mono synths everywhere: an acid bass, an acid arp, and two glide leads.",
   "order": 3,
+  "rules": {
+    "lowSplit": true,
+    "followProg": true,
+    "upperRub": true,
+    "subOctave": false
+  },
   "voices": {
     "chords": "pad",
     "bass": "acid",
