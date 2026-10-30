@@ -34,7 +34,7 @@ function buildId() {
   return Math.round(m).toString(36);
 }
 const ROOT = __dirname;
-const CONFIG_PATH = path.join(ROOT, 'config.json');
+const CONFIG_PATH = process.env.RESONANCE_CONFIG ? path.resolve(ROOT, process.env.RESONANCE_CONFIG) : path.join(ROOT, 'config.json'); // RESONANCE_CONFIG: another settings file (the one-page listening site uses config.onepager.json)
 const PACKS_DIR = path.join(ROOT, 'packs');
 const KITS_DIR = path.join(ROOT, 'kits'); // older favorites (read, and removed from here too)
 const FAV_DIR = path.join(ROOT, 'favorites'); // favorites are saved here
@@ -82,6 +82,18 @@ const startedAt = new Map();    // stem id -> ms it was switched on (for replace
 const decayTimers = new Map();  // stem id -> timer that fades a participant-started stem away
 const pendingTaps = new Map();  // stem id -> Map(clientId -> ms): taps waiting for enough people (gate)
 const plays = new Map();        // stem id -> times participants have started it in this performance (rules.maxPlays, e.g. the gong)
+const touched = new Map();   // stem id -> { name, t, what }: who last changed it (phones and simulated people). Shown on the listening page.
+const hist = new Map();      // stem id -> the last few changes, newest first
+let lastTouchBroadcast = 0;
+function touch(id, sender, what) { // returns true when the listening pages should get a fresh state (throttled: pad movement is high-rate)
+  if (!sender || !sender.label) return false;
+  const now = Date.now(), prev = touched.get(id), rec = { name: sender.label, t: now, what };
+  touched.set(id, rec);
+  const sameBurst = prev && prev.name === rec.name && prev.what === what && now - prev.t < 3000;
+  if (!sameBurst) { const h = hist.get(id) || []; h.unshift(rec); hist.set(id, h.slice(0, 6)); }
+  if (sameBurst && now - lastTouchBroadcast < 1000) return false;
+  lastTouchBroadcast = now; return true;
+}
 function resetShow() { plays.clear(); pendingTaps.clear(); state.finale = false; } // a new performance: the gong's three strikes come back
 function playsSnapshot() {
   const out = {};
@@ -189,6 +201,7 @@ const server = http.createServer((req, res) => {
 
   if (p === '/' || p === '/client') return sendFile(res, path.join(ROOT, 'public', 'client.html'));
   if (p === '/engine') return sendFile(res, path.join(ROOT, 'public', 'engine.html'));
+  if (p === '/listen') return sendFile(res, path.join(ROOT, 'public', 'listen.html'));
   if (p === '/rehearsal' || p === '/api/sim') { // operator only: clients get the same answer as for any page that does not exist
     const key = req.headers['x-engine-key'] || url.searchParams.get('key');
     if (!adminOk(req, key)) { res.writeHead(404); return res.end('Not found'); }
@@ -283,6 +296,9 @@ function snapshot() {
     engine: !!(engineSocket && engineSocket.readyState === 1),
     kitPending: kitPending ? { name: kitPending.kit.name, roles: kitPending.roles } : null,
     clients, simClients,
+    by: Object.fromEntries(touched), // stem id -> { name, t, what }
+    hist: Object.fromEntries([...hist].map(([id, h]) => [id, h])),
+    people: [...wss.clients].filter((ws) => ws.role === 'client' && ws.readyState === 1 && ws.label).map((ws) => ({ name: ws.label, sim: !!ws.simName })),
   };
 }
 
@@ -403,7 +419,7 @@ function handleInput(msg, source, sender) {
       if (!validStem(id)) return;
       if (kitBlocked(id)) { if (sender && source === 'client') deny(sender, id, 'The sounds are changing…'); return; }
       if (state.finale) return; // the show is ending: nothing can be started until a new show
-      if (source === 'client') { if (!audienceToggle(id, sender)) { if (Object.keys(pendingSnapshot()).length) broadcastState(); return; } }
+      if (source === 'client') { if (!audienceToggle(id, sender)) { if (Object.keys(pendingSnapshot()).length) broadcastState(); return; } touch(id, sender, state.active.has(id) ? 'on' : 'off'); }
       else state.active.has(id) ? switchOff(id, source) : switchOn(id, false);
       break;
     }
@@ -442,6 +458,7 @@ function handleInput(msg, source, sender) {
         limited = c.x !== xy.x || c.y !== xy.y || c.v !== xy.v; xy = c;
       }
       state.xy[id] = xy;
+      if (source === 'client' && touch(id, sender, 'pad')) broadcastState();
       { const k = (sender ? sender.cid : source) + ':' + id, now = Date.now(); if (now - (lastXYAct.get(k) || 0) > 400) { lastXYAct.set(k, now); act(source, sender, 'xy', { stem: id, ...xy }); } }
       const out = JSON.stringify({ type: 'xy', stem: id, ...xy });
       for (const ws of wss.clients) if (ws !== sender || limited) send(ws, out);
@@ -468,16 +485,18 @@ function claimEngine(ws) {
   broadcastState();
 }
 
+let guestSeq = 0;
 wss.on('connection', (ws, req) => {
   const url = new URL(req.url, 'http://x');
-  ws.role = url.searchParams.get('role') === 'engine' ? 'engine'
+  ws.role = url.searchParams.get('role') === 'listener' ? 'listener' : url.searchParams.get('role') === 'engine' ? 'engine'
     : url.searchParams.get('role') === 'sensor' ? 'sensor' : url.searchParams.get('role') === 'monitor' ? 'monitor' : 'client';
   if (ws.role === 'client' && url.searchParams.get('sim') && isLoopback(req)) ws.simName = String(url.searchParams.get('sim')).slice(0, 20); /* a simulated person (only this machine can say so) */
   ws.isAlive = true;
   ws.cid = Math.random().toString(36).slice(2, 10); // identifies this participant for group rules
+  ws.label = ws.simName || (ws.role === 'client' ? 'Guest ' + (++guestSeq) : null); // the name the listening page shows
   ws.on('pong', () => { ws.isAlive = true; });
   ws.on('error', (e) => { log(`${ws.role} socket error: ${e.message}`); }); /* a bad frame must never take the server down */
-  if (ws.role !== 'client' && !keyOk(url.searchParams.get('key'))) {
+  if (ws.role !== 'client' && ws.role !== 'listener' && !keyOk(url.searchParams.get('key'))) {
     log(`${ws.role} rejected: bad or missing engine key`);
     return ws.close(4001, 'engine key required');
   }
@@ -501,6 +520,7 @@ wss.on('connection', (ws, req) => {
     if (ws.role !== 'engine' && data.length > 4096) return; // phones, sensors and monitors only send small messages
     let msg;
     try { msg = JSON.parse(data); } catch { return; }
+    if (ws.role === 'listener') { if (msg.type === 'time') send(ws, { type: 'time', c: msg.c, s: Date.now() }); return; } // the listening page: clock sync only
     if (ws.role === 'engine') {
       if (msg.type === 'claim') { claimEngine(ws); return; } // Start was pressed on this page
       if (ws !== engineSocket && (msg.type === 'playing' || msg.type === 'tick' || msg.type === 'reseed')) return; // a standby page is not the engine
@@ -567,6 +587,12 @@ fs.watchFile(CONFIG_PATH, { interval: 1000 }, () => {
   catch (e) { log('config.json invalid: ' + e.message); }
 });
 
+// One-page mode (config.onepager.json, see public/listen.html): the four core layers are always on, and four simulated people play with the pads.
+if (config.onePager) {
+  for (const st of active.stems) state.active.add(st.id);
+  sim.setBot(4, { on: false }); // four simulated people, not five
+  setTimeout(() => { sim.start(); log('one-page mode: the core layers are on; four simulated people are in the room'); broadcastState(); }, 1500);
+}
 server.listen(PORT, () => {
   console.log('\n  Sample packs (default marked *):');
   for (const p of packList) console.log(`   ${p.id === active.id ? '*' : p.playable ? ' ' : 'x'} ${p.name} (${p.id}): ${p.stems.length} stems, ${p.tempo} BPM${p.warnings.length ? ', ' + p.warnings.length + ' warning(s), see: npm run packs' : ''}`);

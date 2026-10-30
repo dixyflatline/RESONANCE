@@ -1,0 +1,571 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RESONANCE · demo</title>
+<meta name="description" content="A web demo of RESONANCE: four core layers that play in your browser, with four people moving the pads.">
+<meta name="theme-color" content="#0c0d10">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;1,400&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #0c0d10; --ink-2: #14161c; --ink-3: #1b1e26; --paper: #efe9dd; --muted: #9a9486;
+    --line: rgba(239, 233, 221, 0.13); --ember: #e0803f; --jade: #86b3a8;
+    --serif: "Cormorant Garamond", Georgia, serif;
+    --sans: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --mono: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body { margin: 0; background: var(--ink); color: var(--paper); font: 15px/1.5 var(--sans); min-height: 100vh; }
+  h1, h2, h3 { font-family: var(--serif); font-weight: 500; line-height: 1.1; margin: 0; }
+  p { margin: 0; }
+  button, input { font: inherit; color: inherit; }
+  .muted { color: var(--muted); }
+
+  /* ---------- page ---------- */
+  header.top { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 14px 22px; border-bottom: 1px solid var(--line); position: sticky; top: 0; background: rgba(12,13,16,.92); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); z-index: 10; }
+  .brand { font-family: var(--serif); letter-spacing: .2em; font-size: 20px; }
+  .brand span { color: var(--ember); }
+  .tag { font-family: var(--mono); font-size: 12px; color: var(--muted); border: 1px solid var(--line); border-radius: 6px; padding: 4px 9px; white-space: nowrap; }
+  main { max-width: 1040px; margin: 0 auto; padding: 30px 16px 140px; }
+  .hero h1 { font-size: clamp(38px, 6vw, 64px); }
+  .hero h1 em { color: var(--ember); font-style: italic; }
+  .hero p { margin-top: 14px; max-width: 42em; color: var(--muted); }
+  .hero-grid { display: grid; grid-template-columns: 1.1fr .9fr; gap: 28px; align-items: center; }
+  .hero-art { margin: 0; }
+  .hero-art img { display: block; width: 100%; max-height: 440px; object-fit: cover; object-position: 30% 40%; border-radius: 14px; border: 1px solid var(--line); }
+  .hero-art figcaption { margin-top: 8px; font-size: 13px; color: var(--muted); }
+  @media (max-width: 760px) { .hero-grid { grid-template-columns: 1fr; } .hero-art img { max-height: 320px; } }
+  .start-row { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; margin: 22px 0 6px; }
+  .btn { background: var(--ember); color: var(--ink); border: 0; border-radius: 999px; padding: 13px 24px; font-weight: 600; cursor: pointer; }
+  .btn:hover { background: var(--paper); }
+  .btn:disabled { opacity: .55; cursor: default; background: var(--ember); }
+  .prep { color: var(--muted); font-size: 14px; }
+  .disclaimer { font-size: 13px; color: var(--muted); margin-top: 6px; }
+
+  .people { margin-top: 28px; }
+  .people-head { font-family: var(--mono); font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); margin: 0 0 12px; }
+  .people-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  .person { border: 1px solid var(--line); border-radius: 12px; padding: 14px; background: var(--ink-2); }
+  .person b { font-family: var(--serif); font-size: 22px; font-weight: 500; display: block; }
+  .person small { display: block; color: var(--muted); font-size: 12px; margin: 2px 0 8px; }
+  .person p { margin: 0; font-size: 14px; color: var(--paper); }
+  @media (max-width: 760px) { .people-grid { grid-template-columns: 1fr 1fr; } }
+  .come { margin: 0 0 28px; }
+  .come .eyebrow { font-family: var(--mono); font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--ember); margin: 0 0 10px; }
+  .come h2 { font-family: var(--serif); font-weight: 500; font-size: clamp(38px, 6vw, 64px); line-height: 1.05; margin: 0 0 18px; }
+  .come ul { list-style: none; padding: 0; margin: 0 0 28px; display: grid; gap: 14px; }
+  .come li { padding-left: 26px; position: relative; color: var(--paper); }
+  .come li::before { content: "—"; position: absolute; left: 0; color: var(--ember); }
+  .come li small { display: block; color: var(--muted); font-size: 14px; margin-top: 2px; }
+  .prep-box { border: 1px dashed var(--line); border-radius: 12px; padding: 18px 20px; color: var(--muted); font-size: 15px; }
+  .prep-box h3 { font-family: var(--serif); font-weight: 500; font-size: 22px; color: var(--paper); margin: 0 0 8px; }
+  .prep-box ul { list-style: disc; padding-left: 20px; margin: 10px 0 0; display: block; }
+  .prep-box li { padding: 0; color: var(--muted); }
+  .prep-box li::before { content: none; }
+  .layers { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 30px; }
+  .card { background: var(--ink-2); border: 1px solid var(--line); border-radius: 14px; padding: 18px; position: relative; overflow: hidden; }
+  .card::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--c); }
+  .card { cursor: pointer; transition: border-color .2s, box-shadow .2s; }
+  .card.mine { border-color: var(--ember); box-shadow: 0 0 0 1px var(--ember), 0 0 28px rgba(224,128,63,.2); }
+  .card.mine .pad { border-color: rgba(224,128,63,.45); }
+  .hero { transition: opacity 1.1s cubic-bezier(.2,.7,.2,1), filter 1.1s ease; }
+  body.has-focus .hero { opacity: .12; filter: blur(2px) saturate(.2); pointer-events: none; }
+  .card { transition: opacity 1.1s cubic-bezier(.2,.7,.2,1), filter 1.1s ease, transform 1.1s cubic-bezier(.2,.7,.2,1), border-color .6s, box-shadow .6s; }
+  .pad canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+  #fx { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 30; }
+  @keyframes glow { 0% { box-shadow: 0 0 0 0 rgba(224,128,63,0); } 45% { box-shadow: 0 0 110px rgba(224,128,63,.45); } 100% { box-shadow: 0 0 30px rgba(224,128,63,.22); } }
+  /* focus: the taken layer opens full width and bigger; the others dim and step back */
+  .layers.has-focus .card { opacity: .22; filter: saturate(.2) blur(1.5px); transform: scale(.97); }
+  .layers.has-focus .card.mine { position: fixed; inset: 12px; z-index: 25; overflow: auto; border-radius: 18px; background: var(--ink-2); opacity: 1; filter: none; transform: none; padding: 26px 28px; animation: glow 1.2s ease-out; }
+  .card.mine .pad { height: min(50vh, 560px); min-height: 260px; }
+  .card.mine h3 { font-size: 40px; }
+  .reactions { display: none; flex-direction: column; gap: 8px; margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--line); font-size: 15px; }
+  .card.mine .reactions { display: flex; }
+  .reactions .who { font-weight: 600; }
+  .reactions .muted { font-size: 12px; font-family: var(--mono); }
+  .release { background: transparent; border: 1px solid var(--ember); color: var(--ember); border-radius: 999px; padding: 3px 11px; font: 12px var(--mono); cursor: pointer; }
+  .release:hover { background: var(--ember); color: var(--ink); }
+  .release[hidden] { display: none; }
+  .card-top { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+  .card h3 { font-size: 26px; }
+  .state { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+  .state.playing { color: var(--jade); }
+  .meter { height: 5px; background: rgba(239,233,221,.08); border-radius: 3px; margin: 12px 0; overflow: hidden; }
+  .meter i { display: block; height: 100%; width: 0; background: var(--c); }
+  .pad { position: relative; height: 150px; border-radius: 10px; background: rgba(239,233,221,.04); border: 1px solid var(--line); cursor: crosshair; touch-action: none; user-select: none; overflow: hidden; }
+  .pad .dot { position: absolute; width: 16px; height: 16px; margin: -8px 0 0 -8px; border-radius: 50%; background: var(--c); box-shadow: 0 0 14px var(--c), 0 0 0 4px rgba(239,233,221,.08); }
+  .pad .dot::before, .pad .dot::after { content: ""; position: absolute; background: rgba(239,233,221,.14); }
+  .pad .dot::before { left: 7px; top: -1000px; width: 1px; height: 2000px; }
+  .pad .dot::after { top: 7px; left: -1000px; height: 1px; width: 2000px; }
+  .pad .cap { position: absolute; font-family: var(--mono); font-size: 11px; color: var(--muted); pointer-events: none; }
+  .pad .cap-x { right: 9px; bottom: 7px; }
+  .pad .cap-y { left: 9px; top: 8px; }
+  .playing-by { margin-top: 12px; display: flex; align-items: center; gap: 9px; font-size: 14px; }
+  .dot-avatar { width: 22px; height: 22px; border-radius: 50%; display: inline-grid; place-items: center; font-size: 11px; font-weight: 600; color: var(--ink); flex: none; }
+  .playing-by .nick { font-weight: 600; }
+  .playing-by .what { color: var(--muted); }
+  .facts { font-family: var(--mono); font-size: 12px; color: var(--muted); margin-top: 8px; }
+
+
+  @media (max-width: 760px) {
+    .layers { grid-template-columns: 1fr; }
+    /* on a phone the taken layer fills the screen: the pad is the whole screen, so x-y swipes never move the page */
+    .layers.has-focus .card.mine { position: fixed; inset: 0; z-index: 25; height: 100vh; height: 100dvh; border-radius: 0; padding: 14px; display: flex; flex-direction: column; overflow: hidden; animation: none; }
+    .card.mine .card-top, .card.mine .meter { flex: 0 0 auto; }
+    .card.mine .pad { flex: 1 1 auto; height: auto; min-height: 0; margin-top: 12px; touch-action: none; }
+    .card.mine .playing-by, .card.mine .facts, .card.mine .reactions { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="brand">RESONANCE<span>.</span></div>
+  <span class="tag">web demo · no server</span>
+</header>
+
+<main>
+  <section class="hero hero-grid">
+    <div>
+  <div class="come" id="come">
+    <h2>Come as you are.</h2>
+    <div class="prep-box">
+      <h3>Before you begin</h3>
+      <p style="margin:0">A quiet room and a few minutes of stillness make the biggest difference.</p>
+      <ul>
+        <li>Choose a time when you won't be interrupted.</li>
+        <li>Let your breathing slow down before the music starts.</li>
+      </ul>
+    </div>
+    <ul>
+      <li>Find a comfortable seat. You don't need an account, an app or any experience.</li>
+      <li>Give the music a few minutes before you judge it.</li>
+      <li>Click in each sound to change it to your liking.</li>
+    </ul>
+  </div>
+    <div class="start-row">
+      <button class="btn" id="start">Tap to listen</button>
+      <span class="prep" id="prep">Your browser needs one tap before it can make sound.</span>
+    </div>
+    <p class="disclaimer">The four people are fictional characters, and their stories are invented for this demo. Nothing here is medical or therapeutic advice.</p>
+    </div>
+    <figure class="hero-art">
+      <img src="IMG_0616.jpg" alt="A trumpeter playing in blue light" />
+    </figure>
+  </section>
+
+  <section class="people" id="people" aria-label="The four people"></section>
+  <section class="layers" id="layers" aria-label="The four core layers"></section>
+</main>
+<canvas id="fx"></canvas>
+
+<script src="layers.js"></script>
+<script>
+(() => {
+  'use strict';
+
+  // ---------- the people ----------
+  // Names and personas are the simulator's (lib/sim.js). Their descriptions are the persona descriptions from the docs.
+  const PEOPLE = {
+    Mika: { color: '#f2a65a', label: 'Explorer', desc: 'Tries lots of layers and switches often.', hop: [30000, 45000], step: 0.14, move: 0.1 },
+    Jun:  { color: '#6fd3c2', label: 'Tweaker', desc: 'Settles on one layer and keeps shaping it with the pad.', hop: [30000, 50000], step: 0.04, move: 0.1 },
+    Sol:  { color: '#e56b8a', label: 'Rhythm lover', desc: 'Goes for rhythm and melody layers, with big complexity sweeps.', hop: [30000, 45000], step: 0.25, move: 0.1 },
+    Ren:  { color: '#8fb8ff', label: 'Calm listener', desc: 'Slow and gentle: nature sounds, soft touches, rarely changes anything.', hop: [30000, 50000], step: 0.03, move: 0.1 },
+  };
+  const NAMES = Object.keys(PEOPLE);
+  document.getElementById('people').innerHTML = `<p class="people-head">The four people in the room</p><div class="people-grid">` +
+    NAMES.map((n) => `<div class="person"><b style="color:${PEOPLE[n].color}">${n}</b><small>${PEOPLE[n].label}</small><p>${PEOPLE[n].desc}</p></div>`).join('') + `</div>`;
+  const COLORS = { You: '#e0803f' };
+  NAMES.forEach((n) => COLORS[n] = PEOPLE[n].color);
+
+  const $ = (s) => document.querySelector(s);
+  const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+  const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const ago = (t) => { const s = Math.max(0, Math.round((Date.now() - t) / 1000)); return s < 60 ? s + ' s ago' : Math.round(s / 60) + ' min ago'; };
+  const cutHz = (f) => 40 * Math.pow(20000 / 40, f);   // f: 0 = closed, 1 = fully open
+  const qOf = (f) => 1.3 + 6 * f * f;                    // resonance rises toward the open end
+  const fmtHz = (hz) => hz >= 1000 ? (hz / 1000).toFixed(hz >= 10000 ? 0 : 1) + ' kHz' : Math.round(hz) + ' Hz';
+  const volGain = (layer, v) => layer.gain * Math.pow(v / 0.8, 2);
+
+  // ---------- the four layers: state ----------
+  const LAYERS = [
+    { id: 1, name: 'Drone', synth: 'drone', color: '#5b8def', gain: 0.7 },
+    { id: 2, name: 'Pad', synth: 'pad', color: '#8b6cf0', gain: 0.7 },
+    { id: 3, name: 'Atmos', synth: 'atmos', color: '#2fb5a3', gain: 0.7 },
+    { id: 4, name: 'Noise', synth: 'texture', color: '#6fa8b8', gain: 0.7 },
+  ];
+
+  const xy = {}, by = {}, hist = {};
+  LAYERS.forEach((l) => { xy[l.id] = { f: 1, v: 0.8 }; hist[l.id] = []; });
+  const LIMITS = { simF: [0.05, 1], simV: [0.3, 1] };
+  const MAX_STEP = 0.1;   // a bot's change per move: at most 10% of the range
+
+  function touch(id, name, what) {
+    const now = Date.now(), prev = by[id], rec = { name, t: now, what };
+    by[id] = rec;
+    const sameBurst = prev && prev.name === name && prev.what === what && now - prev.t < 3000;
+    if (!sameBurst) hist[id] = [rec, ...hist[id]].slice(0, 5);
+  }
+  const moveLog = { Mika: [], Jun: [], Sol: [], Ren: [] };   // recent bot moves, for the live status panel
+
+  // ---------- embers: as the taken card grows or shrinks, a short trail of golden ashes is left along its border ----------
+  const FX = $('#fx'), fx = FX.getContext('2d');
+  const sparks = Array.from({ length: 90 }, (_, i) => ({ t: (i + Math.random() * 0.6) / 90, wake: Math.random() * 500, dur: 150 + Math.random() * 450, last: null }));
+  const TRAIL_MAX = 14;   // a trail is short: at most this many pixels
+  const ASH_MAX = 220;    // a limit on embers at once keeps the frame time steady
+  const ash = [];
+  // one soft glow, drawn once and reused for every ember (a blur on each ember is what made it slow)
+  const glow = document.createElement('canvas'); glow.width = glow.height = 32;
+  { const g = glow.getContext('2d'), gr = g.createRadialGradient(16, 16, 0, 16, 16, 16);
+    gr.addColorStop(0, 'rgba(255,246,206,1)'); gr.addColorStop(0.3, 'rgba(255,200,110,0.8)'); gr.addColorStop(1, 'rgba(255,170,60,0)');
+    g.fillStyle = gr; g.fillRect(0, 0, 32, 32); }
+  let sparkle = { id: null, until: 0 };   // the card whose border gives off embers; `until` ends them after a release
+  let fxRunning = false, prevRect = null, moveStart = 0, wasMoving = false;
+  function perimeter(r, t) {
+    let p = t * 2 * (r.width + r.height);
+    if (p < r.width) return [r.left + p, r.top];
+    p -= r.width; if (p < r.height) return [r.right, r.top + p];
+    p -= r.height; if (p < r.width) return [r.right - p, r.bottom];
+    p -= r.width; return [r.left, r.bottom - p];
+  }
+  function kickFx() { if (!fxRunning) { fxRunning = true; requestAnimationFrame(fxFrame); } }
+  function sparkleOn(id, ms) { sparkle = { id, until: Date.now() + ms }; kickFx(); }
+  function fxFrame() {
+    const W = window.innerWidth, H = window.innerHeight;
+    if (FX.width !== W || FX.height !== H) { FX.width = W; FX.height = H; }
+    const now = Date.now();
+    const active = sparkle.id !== null && now < sparkle.until;   // the embers stop once the zoom has finished
+    fx.clearRect(0, 0, W, H);
+    if (active) {
+      const card = document.querySelector(`.card[data-id="${sparkle.id}"]`);
+      const r = card.getBoundingClientRect();
+      const moving = prevRect && (Math.abs(r.left - prevRect.left) + Math.abs(r.top - prevRect.top) + Math.abs(r.width - prevRect.width) + Math.abs(r.height - prevRect.height)) > 0.5;
+      prevRect = r;
+      if (moving && !wasMoving) moveStart = now;
+      wasMoving = moving;
+      const age = now - moveStart;
+      for (const s of sparks) {
+        const p = perimeter(r, s.t);
+        // the border is changing size: each point leaves a short trail of embers, at its own random moment
+        if (moving && s.last && age >= s.wake && age < s.wake + s.dur && ash.length < ASH_MAX && Math.random() < 0.3) {
+          let tx = s.last[0], ty = s.last[1];
+          const dx = tx - p[0], dy = ty - p[1], d = Math.hypot(dx, dy);
+          if (d > TRAIL_MAX) { tx = p[0] + dx * TRAIL_MAX / d; ty = p[1] + dy * TRAIL_MAX / d; }
+          const f = Math.random();
+          ash.push({ x: tx + (p[0] - tx) * f, y: ty + (p[1] - ty) * f, vx: (Math.random() - 0.5) * 0.5, vy: -0.25 - Math.random() * 0.45,
+                     life: 1, size: 0.5 + Math.random() * 0.6, ph: Math.random() * 6.283, rate: 4 + Math.random() * 7 });
+        }
+        s.last = p;
+      }
+    } else {
+      prevRect = null; wasMoving = false;
+      for (const s of sparks) s.last = null;
+    }
+    // embers keep drifting and fading after they were left
+    fx.globalCompositeOperation = 'lighter';
+    for (let i = ash.length - 1; i >= 0; i--) {
+      const a = ash[i];
+      a.x += a.vx; a.y += a.vy; a.vy *= 0.995; a.life -= 0.022;
+      if (a.life <= 0) { ash.splice(i, 1); continue; }
+      const flicker = 0.55 + 0.45 * Math.sin(now / 1000 * a.rate + a.ph);
+      const d = a.size * 12 * (0.6 + 0.4 * flicker);
+      fx.globalAlpha = a.life * flicker;
+      fx.drawImage(glow, a.x - d / 2, a.y - d / 2, d, d);
+    }
+    fx.globalAlpha = 1; fx.globalCompositeOperation = 'source-over';
+    if (active || ash.length) requestAnimationFrame(fxFrame);
+    else { fxRunning = false; }
+  }
+
+  // ---------- the dot matrix: lit from the bottom-left corner to the handle, like the engine's pad ----------
+  function paintMatrix(card, p) {
+    const cv = card.querySelector('[data-k="matrix"]'), pad = cv.parentElement;
+    const W = pad.clientWidth, H = pad.clientHeight, dpr = window.devicePixelRatio || 1;
+    if (!W) return;
+    if (cv.width !== Math.round(W * dpr) || cv.height !== Math.round(H * dpr)) { cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); }
+    const g = cv.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, W, H);
+    g.fillStyle = getComputedStyle(card).getPropertyValue('--c').trim() || '#888';
+    const C = 16;
+    for (let c = 0; c < C; c++) for (let q = 0; q < C; q++) {
+      const cx = (c + 0.5) / C, cy = (q + 0.5) / C;
+      const lit = cx <= p.f + 0.5 / C && cy <= p.v + 0.5 / C;
+      g.globalAlpha = lit ? 0.35 + 0.5 * cy : 0.09;
+      g.beginPath(); g.arc(cx * W, (1 - cy) * H, lit ? 3 : 2, 0, 6.2832); g.fill();
+    }
+    g.globalAlpha = 1;
+  }
+
+  // ---------- what each bot is doing, from its last few seconds of moves ----------
+  function botStatus(bt) {
+    const now = Date.now();
+    const log = moveLog[bt.name] = moveLog[bt.name].filter((m) => now - m.t < 3000);
+    const layer = LAYERS.find((x) => x.id === bt.focus).name.toLowerCase();
+    if (!log.length) return `is letting the ${layer} rest.`;
+    const sdf = log.reduce((a, m) => a + m.df, 0), sdv = log.reduce((a, m) => a + m.dv, 0);
+    const avg = log.reduce((a, m) => a + Math.abs(m.df) + Math.abs(m.dv), 0) / log.length;
+    const parts = [];
+    if (Math.abs(sdv) > 0.02) parts.push(sdv > 0 ? 'louder' : 'more subdued');
+    if (Math.abs(sdf) > 0.02) parts.push(sdf > 0 ? 'brighter' : 'darker');
+    const how = avg > 0.07 ? 'changing the sounds aggressively' : avg > 0.03 ? 'changing it steadily' : 'changing it gently';
+    return parts.length ? `is making the ${layer} ${parts.join(' and ')}, ${how}.` : `is ${how.replace('changing it', 'shaping the ' + layer)}.`;
+  }
+  function renderReactions() {
+    if (claimed === null) return;
+    const card = document.querySelector(`.card[data-id="${claimed}"]`); if (!card) return;
+    const el = card.querySelector('[data-k="reactions"]');
+    const html = `<span class="muted">the others, right now</span>` + bots.map((bt) => {
+      const displaced = bt.returnTo === claimed;
+      return `<div><span class="who" style="color:${COLORS[bt.name]}">${bt.name}</span> ${botStatus(bt)}${displaced ? ` <span class="muted">stepped aside</span>` : ''}</div>`;
+    }).join('');
+    if (html !== el.dataset.last) { el.innerHTML = html; el.dataset.last = html; }   // only touch the page when the text changes
+  }
+  setInterval(renderReactions, 500);
+
+  function setXY(id, patch, name) {
+    const before = xy[id];
+    xy[id] = { ...xy[id], ...patch };
+    if (NAMES.includes(name)) {
+      moveLog[name].push({ t: Date.now(), df: xy[id].f - before.f, dv: xy[id].v - before.v });
+    }
+    // keep an arrival note ("stepping in", "coming back") on the card for a few seconds
+    const arr = by[id];
+    const arriving = arr && arr.name === name && (arr.what === 'stepping in' || arr.what === 'coming back') && Date.now() - arr.t < 4000;
+    if (!arriving) touch(id, name, 'pad');
+    applyXY(id);
+    scheduleRender();
+  }
+
+  // ---------- the visitor takes a layer ----------
+  let claimed = null;   // the layer id the visitor holds: the bots leave it alone
+  // Taking a layer: whoever is on it steps away to another layer, and drifts back when you let go.
+  let zoomFrom = null;   // { id, rect }: where the card was before the zoom, so the zoom can start there
+  function claim(id) {
+    if (claimed === id) return;
+    zoomFrom = { id, rect: document.querySelector(`.card[data-id="${id}"]`).getBoundingClientRect() };
+    claimed = id;
+    const now = Date.now();
+    for (const b of bots) {
+      if (b.focus !== id) continue;
+      const P = PEOPLE[b.name];
+      b.returnTo = id;
+      b.focus = pick(LAYERS.filter((l) => l.id !== claimed)).id;
+      b.target = null;
+      b.until = now + rnd(P.hop[0], P.hop[1]);
+      touch(b.focus, b.name, 'stepping in');
+    }
+    sparkleOn(id, 1300);
+    scheduleRender();
+  }
+  function release() {
+    if (claimed === null) return;
+    const id = claimed;
+    zoomFrom = { id, rect: document.querySelector(`.card[data-id="${id}"]`).getBoundingClientRect() };
+    claimed = null;
+    touch(id, 'You', 'let go');
+    sparkleOn(id, 700);
+    const now = Date.now();
+    for (const b of bots) {
+      if (b.returnTo !== id) continue;
+      const P = PEOPLE[b.name];
+      b.returnTo = null;
+      b.focus = id;
+      b.target = null;
+      b.until = now + rnd(P.hop[0], P.hop[1]);
+      touch(id, b.name, 'coming back');
+    }
+    scheduleRender();
+  }
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') release(); });
+
+  // ---------- the people move the pads, in character ----------
+  const bots = NAMES.map((name) => ({ name, focus: LAYERS[NAMES.indexOf(name)].id, until: 0, returnTo: null }));
+  function moveBot(b, now) {
+    const P = PEOPLE[b.name];
+    if (now > b.until) {
+      // Tweaker keeps its layer; the others hop about. Never onto a layer the visitor holds.
+      if (b.returnTo === null && (b.name !== 'Jun' || b.until === 0)) { b.focus = pick(LAYERS.filter((l) => l.id !== claimed)).id; b.target = null; }
+      b.until = now + rnd(P.hop[0], P.hop[1]);
+    }
+    if (b.focus !== claimed && Math.random() < P.move) {
+      // Slow and smooth: each move is at most MAX_STEP of the range, so a layer never jumps.
+      const cur = xy[b.focus];
+      let want;
+      if (b.name === 'Sol') { // rhythm lover: sweeps between the two ends, reached gradually
+        if (b.target == null || Math.abs(b.target - cur.f) < 0.02) b.target = cur.f > 0.6 ? rnd(0.25, 0.45) : rnd(0.85, 1);
+        want = b.target;
+      } else {
+        want = cur.f + rnd(-P.step, P.step);
+      }
+      const f = clamp(cur.f + clamp(want - cur.f, -MAX_STEP, MAX_STEP), ...LIMITS.simF);
+      const v = clamp(cur.v + clamp(rnd(-P.step / 2, P.step / 2), -MAX_STEP, MAX_STEP), ...LIMITS.simV);
+      setXY(b.focus, { f, v }, b.name);
+    }
+  }
+  setInterval(() => { const now = Date.now(); for (const b of bots) moveBot(b, now); }, 700);   // half the speed: a move every 0.7 s
+
+  // ---------- audio (same synth as the engine) ----------
+  const TEMPO = 50, BEATS = 4, KEY = 'D', MODE = 'minor', SEED = 7, BARS = 8;
+  let ctx = null, master = null, comp = null, starting = false, running = false;
+  let soundOn = false;
+  function setSound(on) {
+    soundOn = on;
+    if (master) master.gain.setTargetAtTime(on ? 0.85 : 0, ctx.currentTime, 0.25);
+    $('#start').textContent = on ? 'Listening' : 'Sound off · tap to listen';
+    $('#start').setAttribute('aria-pressed', String(on));
+  }
+  const buffers = new Map(), voices = new Map();
+
+  async function startAudio() {
+    if (running || starting) return;
+    starting = true; $('#start').disabled = true;
+    ctx = new (window.AudioContext || window.webkitAudioContext)();
+    await ctx.resume();
+    comp = ctx.createDynamicsCompressor(); comp.threshold.value = -14; comp.ratio.value = 4;
+    master = ctx.createGain(); master.gain.value = 0.85;
+    master.connect(comp); comp.connect(ctx.destination);
+    // The four core layers are pre-rendered (layers.js); decode them instead of synthesising in the browser.
+    let done = 0;
+    for (const l of LAYERS) {
+      $('#prep').textContent = `Loading the layers… ${done}/${LAYERS.length}`;
+      try {
+        const bytes = Uint8Array.from(atob(window.ROOM_LAYERS[l.synth].split(',')[1]), (c) => c.charCodeAt(0));
+        buffers.set(l.id, await ctx.decodeAudioData(bytes.buffer));
+      } catch (e) { console.error(e); }
+      done++;
+    }
+    running = true; starting = false;
+    $('#start').disabled = false;
+    $('#prep').textContent = 'Keep this tab open. Click one of the sound modules to open it and change it with the X-Y controller.';
+    for (const l of LAYERS) startVoice(l.id);
+    setSound(true);
+  }
+  function startVoice(id) {
+    const l = LAYERS.find((x) => x.id === id), buf = buffers.get(id);
+    if (!buf || voices.has(id)) return;
+    const t = ctx.currentTime;
+    const gain = ctx.createGain(); gain.gain.setValueAtTime(0, t);
+    const filter = ctx.createBiquadFilter(); filter.type = 'lowpass'; filter.Q.value = qOf(xy[id].f);
+    const analyser = ctx.createAnalyser(); analyser.fftSize = 512;
+    const src = ctx.createBufferSource(); src.buffer = buf; src.loop = true; src.loopStart = 0; src.loopEnd = buf.duration;
+    src.connect(filter); filter.connect(gain); gain.connect(analyser); analyser.connect(master);
+    src.start(t + 0.05, 0);
+    gain.gain.linearRampToValueAtTime(volGain(l, xy[id].v), t + 0.05 + 8);
+    voices.set(id, { src, gain, filter, analyser, data: new Float32Array(analyser.fftSize) });
+    applyXY(id);
+  }
+  function applyXY(id) {
+    const v = voices.get(id); if (!v) return;
+    const l = LAYERS.find((x) => x.id === id), t = ctx.currentTime;
+    v.filter.frequency.setTargetAtTime(cutHz(xy[id].f), t, 0.15);
+    v.filter.Q.setTargetAtTime(qOf(xy[id].f), t, 0.15);
+    v.gain.gain.setTargetAtTime(volGain(l, xy[id].v), t, 0.15);
+  }
+  function meters() {
+    for (const [id, v] of voices) {
+      v.analyser.getFloatTimeDomainData(v.data);
+      let s = 0; for (let i = 0; i < v.data.length; i++) s += v.data[i] * v.data[i];
+      const bar = document.querySelector(`.card[data-id="${id}"] [data-k="meter"]`);
+      if (bar) bar.style.width = Math.min(100, Math.round(Math.sqrt(s / v.data.length) * 260)) + '%';
+    }
+    requestAnimationFrame(meters);
+  }
+
+  // ---------- the page: layer cards ----------
+  let renderQueued = false;
+  function scheduleRender() { if (renderQueued) return; renderQueued = true; requestAnimationFrame(() => { renderQueued = false; renderCards(); }); }
+  const avatar = (name) => `<span class="dot-avatar" style="background:${COLORS[name] || '#999'}">${esc(name[0])}</span>`;
+
+  function buildCards() {
+    // Grid placement: top-left Noise, top-right Drone, bottom-left Pad, bottom-right Atmos.
+    const SLOTS = [4, 1, 2, 3].map((id) => LAYERS.find((x) => x.id === id));
+    $('#layers').innerHTML = SLOTS.map((l) => `
+      <article class="card" data-id="${l.id}" style="--c:${l.color}">
+        <div class="card-top"><h3>${l.name}</h3><span><button class="release" data-k="release" hidden>Release</button> <span class="state" data-k="state">waiting</span></span></div>
+        <div class="meter"><i data-k="meter"></i></div>
+        <div class="pad" data-k="pad" role="slider" aria-label="${l.name}: filter left to right, volume bottom to top" tabindex="0">
+          <canvas data-k="matrix"></canvas><div class="dot" data-k="dot"></div><span class="cap cap-x">filter →</span><span class="cap cap-y">volume ↑</span>
+        </div>
+        <div class="playing-by" data-k="by"></div>
+        <div class="facts" data-k="facts"></div>
+        <div class="reactions" data-k="reactions"></div>
+      </article>`).join('');
+    for (const l of LAYERS) {
+      const card = document.querySelector(`.card[data-id="${l.id}"]`);
+      // Mouse: taking a layer happens on press. Touch: only on a tap, so a swipe can scroll the page.
+      let touchDown = false;
+      card.addEventListener('pointerdown', (e) => { touchDown = e.pointerType === 'touch'; if (!touchDown && !e.target.closest('[data-k="release"]')) claim(l.id); });
+      card.addEventListener('click', (e) => { if (touchDown && !e.target.closest('[data-k="release"]')) claim(l.id); touchDown = false; });
+      card.querySelector('[data-k="release"]').addEventListener('click', (e) => { e.stopPropagation(); release(); });
+      const pad = card.querySelector('[data-k="pad"]');
+      const padMove = (e) => {
+        const r = pad.getBoundingClientRect();
+        setXY(l.id, { f: clamp((e.clientX - r.left) / r.width, 0, 1), v: clamp(1 - (e.clientY - r.top) / r.height, 0, 1) }, 'You');
+      };
+      let dragging = false;
+      pad.addEventListener('pointerdown', (e) => { dragging = true; pad.setPointerCapture(e.pointerId); padMove(e); });
+      pad.addEventListener('pointermove', (e) => { if (dragging) padMove(e); });
+      pad.addEventListener('pointerup', () => { dragging = false; });
+      pad.addEventListener('pointercancel', () => { dragging = false; });
+      pad.addEventListener('dblclick', () => setXY(l.id, { f: 1, v: 0.8 }, 'You'));
+      pad.addEventListener('keydown', (e) => {
+        const d = 0.05, p = xy[l.id];
+        const next = { ArrowRight: { f: p.f + d }, ArrowLeft: { f: p.f - d }, ArrowUp: { v: p.v + d }, ArrowDown: { v: p.v - d } }[e.key];
+        if (!next) return;
+        e.preventDefault();
+        setXY(l.id, { f: clamp(next.f ?? p.f, 0, 1), v: clamp(next.v ?? p.v, 0, 1) }, 'You');
+      });
+    }
+  }
+
+  function renderCards() {
+    $('#layers').classList.toggle('has-focus', claimed !== null);
+    document.body.classList.toggle('has-focus', claimed !== null);
+    for (const l of LAYERS) {
+      const card = document.querySelector(`.card[data-id="${l.id}"]`); if (!card) continue;
+      const p = xy[l.id];
+      const st = card.querySelector('[data-k="state"]');
+      const mine = claimed === l.id;
+      card.classList.toggle('mine', mine);
+      if (zoomFrom && zoomFrom.id === l.id) {
+        const from = zoomFrom.rect, to = card.getBoundingClientRect(); zoomFrom = null;
+        const dx = from.left - to.left, dy = from.top - to.top, sx = from.width / to.width, sy = from.height / to.height;
+        card.animate([
+          { transformOrigin: 'top left', transform: `translate(${dx}px, ${dy}px) scale(${sx}, ${sy})` },
+          { transformOrigin: 'top left', transform: 'none' },
+        ], { duration: 1000, easing: 'cubic-bezier(.22,.8,.2,1)' });
+      }
+      card.querySelector('[data-k="release"]').hidden = !mine;
+      st.textContent = mine ? 'yours' : voices.has(l.id) ? 'playing' : running ? 'starting' : 'waiting';
+      st.classList.toggle('playing', voices.has(l.id) || mine);
+      const dot = card.querySelector('[data-k="dot"]');
+      dot.style.left = (p.f * 100) + '%';
+      dot.style.top = ((1 - p.v) * 100) + '%';
+      paintMatrix(card, p);
+      const b = by[l.id];
+      card.querySelector('[data-k="by"]').innerHTML = mine
+        ? `${avatar('You')}<span class="nick" style="color:var(--ember)">You</span><span class="what">in control of this layer</span>`
+        : b
+        ? `${avatar(b.name)}<span class="nick" style="color:${COLORS[b.name] || 'inherit'}">${esc(b.name)}</span><span class="what">${b.what === 'pad' ? 'is shaping the sound' : b.what} · ${ago(b.t)}</span>`
+        : `<span class="what">nobody has touched it yet</span>`;
+      card.querySelector('[data-k="facts"]').textContent = `filter ${fmtHz(cutHz(p.f))} · resonance ${qOf(p.f).toFixed(1)} · volume ${Math.round(p.v * 100)}%`;
+    }
+  }
+
+
+  $('#start').addEventListener('click', () => { if (!running) startAudio(); else setSound(!soundOn); });
+
+  // ---------- go ----------
+  buildCards();
+  renderCards();
+  setInterval(renderCards, 2000);
+  requestAnimationFrame(meters);
+})();
+</script>
+</body>
+</html>

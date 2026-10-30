@@ -1,0 +1,383 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RESONANCE · Listen</title>
+<meta name="theme-color" content="#0c0d10">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;1,400&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #0c0d10; --ink-2: #14161c; --paper: #efe9dd; --muted: #a39d8f;
+    --line: rgba(239, 233, 221, 0.14); --ember: #e0803f; --jade: #86b3a8;
+    --serif: "Cormorant Garamond", Georgia, serif;
+    --sans: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body { margin: 0; background: var(--ink); color: var(--paper); font: 16px/1.55 var(--sans); }
+  h1, h2, h3 { font-family: var(--serif); font-weight: 500; line-height: 1.1; margin: 0; }
+  p { margin: 0; }
+  button { font: inherit; }
+  .wrap { max-width: 1040px; margin: 0 auto; padding: 0 16px; }
+  .muted { color: var(--muted); }
+  .eyebrow { font-size: 12px; letter-spacing: .18em; text-transform: uppercase; color: var(--ember); font-weight: 600; margin-bottom: 12px; }
+
+  header.top { border-bottom: 1px solid var(--line); position: sticky; top: 0; background: rgba(12,13,16,.9); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); z-index: 5; }
+  header.top .wrap { display: flex; justify-content: space-between; align-items: center; height: 56px; gap: 12px; }
+  .brand { font-family: var(--serif); letter-spacing: .2em; font-size: 20px; }
+  .brand span { color: var(--ember); }
+  .live { font-size: 13px; color: var(--muted); display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+  .live i { width: 8px; height: 8px; border-radius: 50%; background: #5d6170; }
+  .live.on i { background: var(--jade); box-shadow: 0 0 0 4px rgba(134,179,168,.18); }
+
+  .hero { padding: 56px 0 28px; }
+  .hero h1 { font-size: clamp(40px, 7vw, 72px); }
+  .hero h1 em { color: var(--ember); font-style: italic; }
+  .hero .lead { margin-top: 18px; font-size: clamp(17px, 2vw, 19px); max-width: 40em; }
+  .hero .lead.muted { margin-top: 10px; font-size: 15px; }
+  .start-row { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; margin-top: 28px; }
+  .btn { background: var(--ember); color: var(--ink); border: 0; border-radius: 999px; padding: 15px 26px; font-weight: 600; font-size: 16px; cursor: pointer; }
+  .btn:hover { background: var(--paper); }
+  .btn:disabled { opacity: .55; cursor: default; background: var(--ember); }
+  .prep { color: var(--muted); font-size: 14px; }
+
+  .room { padding: 20px 0 8px; }
+  .room-line { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  .room-line .label { color: var(--muted); font-size: 14px; margin-right: 4px; }
+  .chip { border: 1px solid var(--line); border-radius: 999px; padding: 5px 12px; font-size: 14px; background: var(--ink-2); }
+  .chip.sim::before { content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--jade); margin-right: 8px; vertical-align: middle; }
+  .chip.phone::before { content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--ember); margin-right: 8px; vertical-align: middle; }
+  .chip.none { color: var(--muted); }
+
+  .layers { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; padding: 22px 0 40px; }
+  .card { background: var(--ink-2); border: 1px solid var(--line); border-radius: 16px; padding: 22px; position: relative; overflow: hidden; }
+  .card::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--c, var(--ember)); opacity: .9; }
+  .card-top { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+  .card h3 { font-size: 30px; }
+  .state { font-size: 13px; color: var(--muted); white-space: nowrap; }
+  .state.playing { color: var(--jade); }
+  .about { color: var(--muted); font-size: 15px; margin-top: 6px; }
+  .meter { height: 6px; background: rgba(239,233,221,.08); border-radius: 3px; margin: 16px 0 14px; overflow: hidden; }
+  .meter i { display: block; height: 100%; width: 0; background: var(--c, var(--ember)); border-radius: 3px; transition: width .08s linear; }
+  .settings { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 0; }
+  .settings div { background: rgba(239,233,221,.04); border-radius: 10px; padding: 10px 12px; }
+  .settings dt { font-size: 12px; color: var(--muted); letter-spacing: .08em; text-transform: uppercase; }
+  .settings dd { margin: 2px 0 0; font-size: 18px; font-variant-numeric: tabular-nums; }
+  .by { margin-top: 16px; }
+  .by .label { font-size: 12px; color: var(--muted); letter-spacing: .08em; text-transform: uppercase; }
+  .by .who { display: block; font-size: 17px; margin-top: 2px; }
+  .by .who.sim { color: var(--jade); }
+  .by .who.phone { color: var(--ember); }
+  .recent { list-style: none; padding: 0; margin: 10px 0 0; display: grid; gap: 4px; font-size: 14px; color: var(--muted); }
+  .recent li b { color: var(--paper); font-weight: 500; }
+  .can { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line); font-size: 14px; color: var(--muted); }
+  .can b { color: var(--paper); font-weight: 500; }
+
+  .join { border-top: 1px solid var(--line); padding: 32px 0 56px; display: grid; grid-template-columns: 1fr 1fr; gap: 40px; align-items: start; }
+  .join h2 { font-size: 36px; margin-bottom: 12px; }
+  .join ol { margin: 0; padding-left: 20px; color: var(--muted); display: grid; gap: 8px; }
+  .url { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 15px; background: var(--ink-2); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; word-break: break-all; color: var(--jade); }
+
+  .toast { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); background: var(--ink-2); border: 1px solid var(--line); border-radius: 10px; padding: 10px 16px; font-size: 14px; opacity: 0; transition: opacity .3s; pointer-events: none; max-width: 90vw; }
+  .toast.show { opacity: 1; }
+
+  @media (max-width: 760px) {
+    .layers, .join { grid-template-columns: 1fr; }
+    .card h3 { font-size: 26px; }
+    .live { font-size: 12px; }
+  }
+  @media (prefers-reduced-motion: reduce) { .meter i { transition: none; } }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap">
+    <div class="brand">RESONANCE<span>.</span></div>
+    <div class="live" id="live"><i></i><span id="liveText">Connecting…</span></div>
+  </div>
+</header>
+
+<main class="wrap">
+  <section class="hero">
+    <p class="eyebrow">Listen · one page</p>
+    <h1>Four layers, <em>always</em> on.</h1>
+    <p class="lead">This is the bed of the piece: a drone, a pad, an air layer and a noise texture. It plays for as long as the page is open, and the room shapes it: move a pad to open or close the filter, or use the fader to bring a layer forward.</p>
+    <p class="lead muted">Four simulated people are playing with it now. Anyone who joins from a phone can play too.</p>
+    <div class="start-row">
+      <button class="btn" id="start">Tap to listen</button>
+      <span class="prep" id="prep">Your browser needs one tap before it can make sound.</span>
+    </div>
+  </section>
+
+  <section class="room" aria-live="polite">
+    <div class="room-line" id="room"><span class="label">In the room</span></div>
+  </section>
+
+  <section class="layers" id="layers" aria-label="The four core layers"></section>
+
+  <section class="join">
+    <div>
+      <p class="eyebrow">Join from your phone</p>
+      <h2>Bring your phone into the room.</h2>
+      <ol>
+        <li>Open the address below on a phone on the same Wi-Fi.</li>
+        <li>Tap a layer to open its pad. Drag up or down to change its filter.</li>
+        <li>Use the fader for its volume. Each change shows here under “Played by”.</li>
+      </ol>
+    </div>
+    <div>
+      <div class="url" id="joinUrl">Loading the address…</div>
+      <p class="muted" style="font-size:14px;margin-top:10px">The phone's own name in this room is “Guest” with a number.</p>
+    </div>
+  </section>
+</main>
+
+<div class="toast" id="toast" role="status"></div>
+
+<script src="/synth.js"></script>
+<script>
+(() => {
+  'use strict';
+
+  // What each core layer is and what a visitor can do with it (synth types from packs/core-open).
+  const ABOUT = {
+    drone: 'A low, slow drone on the tonic and fifth. The floor of the piece.',
+    pad: 'A warm chord pad that follows the progression, one chord every two bars.',
+    atmos: 'Soft air above the pad: two timbres that slowly morph into each other.',
+    texture: 'Filtered-noise waves that swell and fall, like wind over water.',
+  };
+  const CAN = 'Drag the pad up or down to open or close the filter. The fader sets its volume. Left and right have no effect on this layer.';
+
+  const $ = (s) => document.querySelector(s);
+  const fmtHz = (hz) => hz >= 1000 ? (hz / 1000).toFixed(hz >= 10000 ? 0 : 1) + ' kHz' : Math.round(hz) + ' Hz';
+  const cutHz = (y) => 60 * Math.pow(20000 / 60, y);            // same mapping as the phone pads (xy.js)
+  const volGain = (stem, v) => stem.gain * Math.pow(v / 0.8, 2); // same mapping as the phone fader
+  const ago = (t) => { const s = Math.max(0, Math.round((Date.now() - t) / 1000)); return s < 60 ? s + ' s ago' : Math.round(s / 60) + ' min ago'; };
+  const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+  let cfg = null, snap = null, ws = null, ctx = null, master = null, comp = null;
+  let buffers = new Map();        // stem id -> AudioBuffer (rendered in this browser)
+  let loopLen = 0;                // seconds: every core layer loops over the same number of bars
+  const voices = new Map();       // stem id -> { src, gain, filter, analyser, data, stopTimer }
+  let listening = false, rendering = false;
+  let offset = 0, bestRtt = Infinity, bestAt = 0;  // server clock - this clock (ms)
+  const serverNow = () => Date.now() + offset;
+  const toast = (msg) => { const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove('show'), 2600); };
+
+  // ---------- connection ----------
+  function connect() {
+    const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+    ws = new WebSocket(proto + '://' + location.host + '/ws?role=listener');
+    ws.onopen = () => { setLive(true); syncClock(); };
+    ws.onclose = () => { setLive(false); setTimeout(connect, 2000); };
+    ws.onerror = () => ws.close();
+    ws.onmessage = (ev) => {
+      let m; try { m = JSON.parse(ev.data); } catch { return; }
+      if (m.type === 'time') return onTime(m);
+      if (m.type === 'config') return onConfig(m);
+      if (m.type === 'state') return onState(m);
+      if (m.type === 'xy') return onXY(m);
+    };
+  }
+  function syncClock() { // a few quick round trips, then the best (fastest) one is kept
+    let n = 0; const go = () => { if (ws && ws.readyState === 1 && n++ < 8) { ws.send(JSON.stringify({ type: 'time', c: Date.now() })); setTimeout(go, 250); } }; go();
+    setInterval(() => { if (ws && ws.readyState === 1) ws.send(JSON.stringify({ type: 'time', c: Date.now() })); }, 30000);
+  }
+  function onTime(m) {
+    const now = Date.now(), rtt = now - m.c;
+    if (rtt < bestRtt || now - bestAt > 60000) { bestRtt = rtt; bestAt = now; offset = (m.s + rtt / 2) - now; }
+  }
+  function setLive(on) { $('#live').classList.toggle('on', on); $('#liveText').textContent = on ? 'The room is playing' : 'Reconnecting…'; }
+
+  function onConfig(m) {
+    const first = !cfg || cfg.build !== m.build;
+    cfg = m;
+    if (!snap) snap = { active: [], xy: {}, by: {}, hist: {}, people: [] };
+    renderCards(); renderJoin();
+    if (first && listening && !rendering) renderAll(); // the room changed while listening: render the new layers
+  }
+  function onState(m) {
+    snap = { ...snap, ...m };
+    renderRoom(); renderCards();
+    if (listening && buffers.size) reconcile();
+  }
+  function onXY(m) {
+    if (!snap) return;
+    snap.xy = { ...snap.xy, [m.stem]: { x: m.x, y: m.y, v: m.v } };
+    applyXY(m.stem); updateCard(m.stem);
+  }
+
+  // ---------- audio ----------
+  async function start() {
+    if (listening || rendering) return;
+    if (!cfg) { toast('Still connecting. Try again in a moment.'); return; }
+    rendering = true;
+    $('#start').disabled = true;
+    ctx = new (window.AudioContext || window.webkitAudioContext)();
+    await ctx.resume();
+    comp = ctx.createDynamicsCompressor(); comp.threshold.value = -14; comp.ratio.value = 4;
+    master = ctx.createGain(); master.gain.value = 0.85;
+    master.connect(comp); comp.connect(ctx.destination);
+    await renderAll();
+    listening = true; rendering = false;
+    $('#start').textContent = 'Listening';
+    $('#prep').textContent = 'Keep this tab open. The layers loop on the room’s clock, so they stay together across every browser.';
+    reconcile();
+  }
+
+  async function renderAll() {
+    if (!cfg || !window.ResonanceSynth || !ctx) return;
+    rendering = true;
+    const stems = cfg.stems.filter((s) => !s.file);
+    let done = 0;
+    for (const st of stems) {
+      $('#prep').textContent = `Preparing the layers in your browser… ${done}/${stems.length}`;
+      try {
+        const buf = await ResonanceSynth.renderStem({
+          synth: st.synth, id: st.id, sampleRate: ctx.sampleRate, tempo: cfg.tempo,
+          beatsPerBar: cfg.beatsPerBar, bars: st.bars || 8, key: cfg.key, mode: cfg.mode,
+          progression: st.progression, style: st.style, seed: cfg.seed, custom: null, lush: true, tiers: false,
+        });
+        buffers.set(st.id, buf); loopLen = buf.duration;
+      } catch (e) { console.error(e); toast(`${st.name} could not be prepared here.`); }
+      done++;
+    }
+    rendering = false;
+    $('#prep').textContent = '';
+  }
+
+  // Bring the sounding layers in line with the room: layers that are on fade in, layers that are off fade out.
+  function reconcile() {
+    if (!listening || !ctx) return;
+    const want = new Set(snap.active || []);
+    for (const id of want) {
+      if (!buffers.has(id)) continue;
+      const v = voices.get(id);
+      if (!v) startVoice(id);
+      else if (v.stopTimer) { // switched back on while fading out: cancel the stop and fade back up
+        clearTimeout(v.stopTimer); v.stopTimer = null;
+        v.gain.gain.cancelScheduledValues(ctx.currentTime); v.gain.gain.setValueAtTime(v.gain.gain.value, ctx.currentTime);
+      }
+    }
+    for (const id of [...voices.keys()]) if (!want.has(id)) stopVoice(id);
+    for (const id of voices.keys()) applyXY(id);
+  }
+
+  function startVoice(id) {
+    const st = cfg.stems.find((s) => s.id === id), buf = buffers.get(id);
+    if (!st || !buf) return;
+    const t = ctx.currentTime;
+    const gain = ctx.createGain(); gain.gain.setValueAtTime(0, t);
+    const filter = ctx.createBiquadFilter(); filter.type = 'lowpass'; filter.Q.value = 1.3;
+    const analyser = ctx.createAnalyser(); analyser.fftSize = 512;
+    const src = ctx.createBufferSource(); src.buffer = buf; src.loop = true; src.loopStart = 0; src.loopEnd = buf.duration;
+    src.connect(filter); filter.connect(gain); gain.connect(analyser); analyser.connect(master);
+    // Where the loop should be right now, on the room's clock (every browser agrees, to within network jitter).
+    const pos = ((serverNow() / 1000) % buf.duration + buf.duration) % buf.duration;
+    src.start(t + 0.05, pos);
+    gain.gain.linearRampToValueAtTime(volGain(st, 0.8), t + 0.05 + 8);      // core layers fade in over 8 s
+    voices.set(id, { src, gain, filter, analyser, data: new Float32Array(analyser.fftSize), stopTimer: null, stem: st });
+    applyXY(id);
+  }
+
+  function stopVoice(id) {
+    const v = voices.get(id); if (!v || v.stopTimer) return; // already fading out
+    const t = ctx.currentTime;
+    v.gain.gain.cancelScheduledValues(t);
+    v.gain.gain.setValueAtTime(v.gain.gain.value, t);
+    v.gain.gain.linearRampToValueAtTime(0, t + 8);                         // fade out over 8 s, as the performer's layers do
+    clearTimeout(v.stopTimer);
+    v.stopTimer = setTimeout(() => { try { v.src.stop(); } catch {} voices.delete(id); }, 8200);
+  }
+
+  function applyXY(id) {
+    const v = voices.get(id); if (!v || !ctx) return;
+    const xy = (snap.xy && snap.xy[id]) || { x: 0.6, y: 1, v: 0.8 };
+    const t = ctx.currentTime;
+    v.filter.frequency.setTargetAtTime(cutHz(xy.y), t, 0.15);
+    if (!v.stopTimer) v.gain.gain.setTargetAtTime(volGain(v.stem, xy.v), t, 0.15);
+  }
+
+  // ---------- drawing ----------
+  function renderRoom() {
+    const people = snap.people || [];
+    const chips = people.map((p) => `<span class="chip ${p.sim ? 'sim' : 'phone'}">${esc(p.name)}${p.sim ? '' : ' · phone'}</span>`).join('');
+    $('#room').innerHTML = `<span class="label">In the room</span>${chips || '<span class="chip none">Nobody else yet</span>'}`;
+  }
+
+  function renderCards() {
+    if (!cfg) return;
+    const box = $('#layers');
+    if (!box.children.length) {
+      box.innerHTML = cfg.stems.map((st) => `
+        <article class="card" data-id="${st.id}" style="--c:${esc(st.color || '#e0803f')}">
+          <div class="card-top"><h3>${esc(st.name)}</h3><span class="state" data-k="state">Off</span></div>
+          <p class="about">${esc(ABOUT[st.synth] || st.role || '')}</p>
+          <div class="meter"><i data-k="meter"></i></div>
+          <dl class="settings">
+            <div><dt>Filter</dt><dd data-k="cut">–</dd></div>
+            <div><dt>Volume</dt><dd data-k="vol">–</dd></div>
+          </dl>
+          <div class="by"><span class="label">Played by</span><span class="who" data-k="who">Nobody yet</span></div>
+          <ol class="recent" data-k="recent"></ol>
+          <p class="can"><b>On your phone:</b> ${esc(CAN)}</p>
+        </article>`).join('');
+    }
+    for (const st of cfg.stems) updateCard(st.id);
+  }
+
+  function updateCard(id) {
+    const card = document.querySelector(`.card[data-id="${id}"]`); if (!card || !snap) return;
+    const on = (snap.active || []).includes(id);
+    const xy = (snap.xy && snap.xy[id]) || { x: 0.6, y: 1, v: 0.8 };
+    const stem = cfg.stems.find((s) => s.id === id);
+    const st = card.querySelector('[data-k="state"]');
+    st.textContent = on ? (voices.has(id) ? 'Playing' : 'Starting…') : 'Off';
+    st.classList.toggle('playing', on);
+    card.querySelector('[data-k="cut"]').textContent = fmtHz(cutHz(xy.y)) + (xy.y > 0.97 ? ' · open' : '');
+    card.querySelector('[data-k="vol"]').textContent = Math.round(xy.v * 100) + '%';
+    const by = (snap.by || {})[id];
+    const who = card.querySelector('[data-k="who"]');
+    if (by) {
+      const kind = by.name.startsWith('Guest') ? 'phone' : 'sim';
+      who.className = 'who ' + kind;
+      who.textContent = by.name + ' · ' + (by.what === 'pad' ? 'moved the pad' : by.what === 'on' ? 'switched it on' : by.what === 'off' ? 'switched it off' : by.what) + ' · ' + ago(by.t);
+    } else { who.className = 'who'; who.textContent = 'Nobody yet. It plays its starting sound.'; }
+    const h = ((snap.hist || {})[id] || []).slice(0, 4);
+    card.querySelector('[data-k="recent"]').innerHTML = h.map((r) => `<li><b>${esc(r.name)}</b> · ${r.what === 'pad' ? 'pad' : r.what} · ${ago(r.t)}</li>`).join('');
+    void stem;
+  }
+
+  function renderJoin() {
+    const url = (cfg.lanUrls || [])[0];
+    const u = typeof url === 'string' ? url : (url && url.url) || (location.origin + '/');
+    $('#joinUrl').textContent = u.replace(/\/listen$/, '/');
+  }
+
+  // Level meters: a short loop, cheap enough for every frame.
+  function meters() {
+    for (const [id, v] of voices) {
+      v.analyser.getFloatTimeDomainData(v.data);
+      let s = 0; for (let i = 0; i < v.data.length; i++) s += v.data[i] * v.data[i];
+      const rms = Math.sqrt(s / v.data.length);
+      const pct = Math.min(100, Math.round(rms * 260));
+      const bar = document.querySelector(`.card[data-id="${id}"] [data-k="meter"]`);
+      if (bar) bar.style.width = pct + '%';
+    }
+    requestAnimationFrame(meters);
+  }
+
+  // Keep the "x s ago" text fresh.
+  setInterval(() => { if (snap && cfg) for (const st of cfg.stems) updateCard(st.id); }, 2000);
+
+  $('#start').addEventListener('click', start);
+  connect();
+  requestAnimationFrame(meters);
+})();
+</script>
+</body>
+</html>

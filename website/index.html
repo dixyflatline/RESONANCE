@@ -1,0 +1,542 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RESONANCE · Music that takes you there</title>
+<meta name="description" content="RESONANCE is live music for groups and for quiet time alone, shaped together with the musician. It is not therapy.">
+<meta name="theme-color" content="#0c0d10">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;1,400&family=Inter:wght@400;500;600&family=Noto+Serif+SC:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #0c0d10;
+    --ink-2: #14161c;
+    --ink-3: #1d2028;
+    --paper: #efe9dd;
+    --muted: #a39d8f;
+    --line: rgba(239, 233, 221, 0.14);
+    --ember: #e0803f;
+    --jade: #86b3a8;
+    --serif: "Cormorant Garamond", "Noto Serif SC", "Songti SC", Georgia, serif;
+    --sans: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --max: 1080px;
+  }
+
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    background: var(--ink);
+    color: var(--paper);
+    font-family: var(--sans);
+    font-size: 16px;
+    line-height: 1.6;
+  }
+  img, svg { display: block; max-width: 100%; }
+  a { color: var(--ember); text-decoration-thickness: 1px; text-underline-offset: 3px; }
+  a:hover { color: var(--paper); }
+  :focus-visible { outline: 2px solid var(--ember); outline-offset: 3px; border-radius: 2px; }
+
+  .wrap { width: 100%; max-width: var(--max); margin: 0 auto; padding: 0 16px; }
+  section { padding: 96px 0; border-top: 1px solid var(--line); }
+  .eyebrow {
+    font-size: 12px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--ember);
+    margin: 0 0 14px;
+    font-weight: 600;
+  }
+  h1, h2, h3 { font-family: var(--serif); font-weight: 500; line-height: 1.08; margin: 0; letter-spacing: -0.005em; }
+  h1 { font-size: clamp(48px, 8vw, 96px); }
+  h2 { font-size: clamp(36px, 5vw, 56px); margin-bottom: 20px; }
+  h3 { font-size: 26px; margin-bottom: 8px; }
+  p { margin: 0 0 16px; color: var(--paper); }
+  .lead { font-size: clamp(18px, 2vw, 21px); color: var(--paper); max-width: 40em; opacity: 0.92; }
+  .muted { color: var(--muted); }
+  .sub { max-width: 38em; color: var(--muted); }
+  .cjk { font-family: "Noto Serif SC", "Songti SC", serif; font-weight: 400; color: var(--muted); letter-spacing: 0.04em; }
+
+  /* Header */
+  .top {
+    position: sticky; top: 0; z-index: 20;
+    background: rgba(12, 13, 16, 0.82);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--line);
+  }
+  .top .wrap { display: flex; align-items: center; justify-content: space-between; height: 60px; }
+  .brand { font-family: var(--serif); font-size: 22px; letter-spacing: 0.2em; color: var(--paper); text-decoration: none; }
+  .brand span { color: var(--ember); }
+  .nav { display: flex; gap: 22px; align-items: center; }
+  .nav a { color: var(--muted); text-decoration: none; font-size: 14px; }
+  .nav a:hover { color: var(--paper); }
+  .nav .pill {
+    color: var(--ink); background: var(--paper); padding: 8px 14px; border-radius: 999px; font-weight: 600;
+  }
+  .nav .pill:hover { background: var(--ember); color: var(--ink); }
+  .menu-btn {
+    display: none; background: none; border: 1px solid var(--line); color: var(--paper);
+    border-radius: 8px; padding: 6px 12px; font: inherit; font-size: 14px; cursor: pointer;
+  }
+
+  /* Buttons */
+  .btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 14px 22px; border-radius: 999px; font-weight: 600; font-size: 15px;
+    text-decoration: none; border: 1px solid var(--paper); color: var(--paper);
+    transition: background .2s, color .2s, border-color .2s;
+  }
+  .btn:hover { background: var(--paper); color: var(--ink); }
+  .btn.primary { background: var(--ember); border-color: var(--ember); color: var(--ink); }
+  .btn.primary:hover { background: var(--paper); border-color: var(--paper); }
+  .btn-row { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 32px; }
+
+  /* Hero */
+  .hero { padding: 88px 0 96px; border-top: 0; }
+  .hero .wrap { display: grid; grid-template-columns: 1.15fr 0.85fr; gap: 48px; align-items: stretch; }
+  .hero .status {
+    display: inline-flex; align-items: center; gap: 10px; font-size: 13px; color: var(--muted);
+    border: 1px solid var(--line); border-radius: 999px; padding: 6px 14px; margin-bottom: 26px;
+  }
+  .hero .status i { width: 8px; height: 8px; border-radius: 50%; background: var(--jade); box-shadow: 0 0 0 4px rgba(134,179,168,.18); }
+  .hero h1 em { color: var(--ember); font-style: italic; }
+  .hero .lead { margin-top: 24px; }
+
+  .solo-art { margin: 0; width: 100%; min-height: 0; position: relative; }
+  .solo-art img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center 35%; border-radius: 14px; border: 1px solid var(--line); }
+  @media (max-width: 760px) { .solo-art { max-width: 340px; aspect-ratio: 4 / 5; justify-self: center; } }
+  .rings-wrap { position: relative; width: 100%; aspect-ratio: 1; max-width: 460px; justify-self: center; }
+  .rings { width: 100%; height: 100%; }
+  .ring {
+    fill: none; stroke: var(--ember); stroke-width: 1.2; opacity: 0.55;
+    transform-origin: 200px 200px;
+    animation: breathe 4.8s ease-in-out infinite; /* one bar at 50 BPM = 4 beats x 1.2 s */
+  }
+  .ring.r2 { stroke: var(--paper); opacity: 0.22; animation-delay: -0.6s; }
+  .ring.r3 { stroke: var(--jade); opacity: 0.45; animation-delay: -1.2s; }
+  .ring.r4 { stroke: var(--paper); opacity: 0.16; animation-delay: -1.8s; }
+  .ring.r5 { stroke: var(--ember); opacity: 0.3; animation-delay: -2.4s; }
+  .core { fill: var(--ember); animation: core 4.8s ease-in-out infinite; transform-origin: 200px 200px; }
+  @keyframes breathe {
+    0%, 100% { transform: scale(0.94); }
+    50% { transform: scale(1.04); }
+  }
+  @keyframes core {
+    0%, 100% { opacity: 0.55; transform: scale(0.9); }
+    25% { opacity: 1; transform: scale(1.05); }
+  }
+  .rings-caption {
+    position: absolute; left: 0; right: 0; bottom: -6px; text-align: center;
+    font-size: 12px; color: var(--muted); letter-spacing: 0.14em; text-transform: uppercase;
+  }
+
+  /* Parts */
+  .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 40px; }
+  .card {
+    background: var(--ink-2); border: 1px solid var(--line); border-radius: 14px; padding: 28px;
+  }
+  .card .cjk { font-size: 20px; display: block; margin-bottom: 6px; }
+  .card .role { font-size: 14px; color: var(--muted); margin: 0 0 14px; }
+  .card code, .mono {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 13px;
+    color: var(--jade);
+  }
+  .card p:last-child { margin-bottom: 0; }
+
+  /* How it runs */
+  .steps { list-style: none; margin: 40px 0 0; padding: 0; display: grid; gap: 0; counter-reset: step; }
+  .steps li {
+    display: grid; grid-template-columns: 72px 1fr; gap: 16px; padding: 26px 0;
+    border-top: 1px solid var(--line);
+  }
+  .steps li:last-child { border-bottom: 1px solid var(--line); }
+  .steps .n { font-family: var(--serif); font-size: 44px; color: var(--ember); line-height: 1; }
+  .steps h3 { font-size: 24px; }
+  .steps p { color: var(--muted); margin: 0; max-width: 40em; }
+
+  /* Rules table */
+  .rules { width: 100%; border-collapse: collapse; margin-top: 36px; font-size: 15px; }
+  .rules th, .rules td { text-align: left; padding: 16px 14px; border-top: 1px solid var(--line); vertical-align: top; }
+  .rules th { color: var(--muted); font-weight: 500; font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; }
+  .rules td:first-child { font-family: var(--serif); font-size: 21px; white-space: nowrap; }
+  .rules tr:last-child td { border-bottom: 1px solid var(--line); }
+  .tag {
+    display: inline-block; font-size: 12px; padding: 3px 10px; border-radius: 999px;
+    border: 1px solid var(--line); color: var(--muted); margin: 2px 4px 2px 0;
+  }
+
+  /* Layers */
+  .layers { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 40px; }
+  .layer { background: var(--ink-2); border: 1px solid var(--line); border-radius: 12px; padding: 20px 22px; }
+  .layer h3 { font-size: 22px; margin-bottom: 4px; display: flex; align-items: center; gap: 10px; }
+  .layer h3::before { content: ""; width: 10px; height: 10px; border-radius: 50%; background: var(--c, var(--ember)); flex: none; }
+  .layer p { font-size: 15px; color: var(--muted); margin: 0; }
+
+  .progression {
+    margin-top: 28px; padding: 22px 26px; border-left: 2px solid var(--ember);
+    background: var(--ink-2); border-radius: 0 12px 12px 0;
+  }
+  .progression .chords { font-family: var(--serif); font-size: 26px; margin: 0 0 6px; }
+
+  /* Gong */
+  .gong { display: grid; grid-template-columns: 1fr 1fr; gap: 56px; align-items: center; }
+  .strikes { display: grid; gap: 12px; }
+  .strike {
+    display: flex; justify-content: space-between; align-items: baseline; gap: 16px;
+    background: var(--ink-2); border: 1px solid var(--line); border-radius: 12px; padding: 16px 20px;
+  }
+  .strike b { font-family: var(--serif); font-weight: 500; font-size: 24px; }
+  .strike span { color: var(--muted); font-size: 14px; }
+  .strike.last b { color: var(--ember); }
+
+  /* Sensors */
+  .sensors { display: grid; grid-template-columns: 1fr 1fr; gap: 56px; align-items: start; }
+  .codeblock {
+    background: var(--ink-2); border: 1px solid var(--line); border-radius: 12px; padding: 20px;
+    overflow-x: auto; margin: 0;
+  }
+  .codeblock code { white-space: pre; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 13px; color: var(--paper); line-height: 1.7; }
+  .future-list { list-style: none; padding: 0; margin: 20px 0 0; display: grid; gap: 10px; }
+  .future-list li { display: flex; gap: 12px; align-items: baseline; color: var(--muted); }
+  .future-list li b { color: var(--paper); font-weight: 600; min-width: 110px; }
+
+  /* Join */
+  .join { display: grid; grid-template-columns: 1fr 1fr; gap: 56px; align-items: start; }
+  .checks { list-style: none; padding: 0; margin: 0; display: grid; gap: 14px; }
+  .checks li { padding-left: 28px; position: relative; color: var(--paper); }
+  .checks li::before { content: "—"; position: absolute; left: 0; color: var(--ember); }
+  .checks li small { display: block; color: var(--muted); font-size: 14px; }
+  .note {
+    font-size: 14px; color: var(--muted); border: 1px dashed var(--line); border-radius: 12px; padding: 16px 18px; margin-top: 8px;
+  }
+
+  /* Booking */
+  .book { display: grid; grid-template-columns: 1fr 1.3fr; gap: 56px; align-items: start; }
+  .book-form { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 16px; }
+  .book-form label { display: grid; gap: 6px; font-size: 14px; color: var(--muted); }
+  .book-form label.wide { grid-column: 1 / -1; }
+  .book-form input, .book-form select, .book-form textarea {
+    background: var(--ink-2); color: var(--paper); border: 1px solid var(--line); border-radius: 10px;
+    padding: 11px 12px; font: inherit; font-size: 15px; width: 100%;
+  }
+  .book-form textarea { min-height: 110px; resize: vertical; }
+  .book-form input:focus, .book-form select:focus, .book-form textarea:focus { outline: 2px solid var(--ember); outline-offset: 1px; }
+  .book-form .btn { justify-self: start; }
+  @media (max-width: 760px) { .book { grid-template-columns: 1fr; gap: 36px; } .book-form { grid-template-columns: 1fr; } }
+
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 32px; }
+  @media (max-width: 760px) { .grid-2 { grid-template-columns: 1fr; } }
+
+  .ahead-news { margin-top: 24px; }
+  .about { display: grid; grid-template-columns: 1fr 1.2fr; gap: 56px; align-items: start; }
+  .about p { margin: 0 0 16px; }
+  @media (max-width: 760px) { .about { grid-template-columns: 1fr; gap: 20px; } }
+
+  /* Newsletter */
+  .subscribe { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 22px; max-width: 520px; }
+  .subscribe input { flex: 1 1 240px; background: var(--ink-2); color: var(--paper); border: 1px solid var(--line); border-radius: 999px; padding: 12px 18px; font: inherit; font-size: 15px; }
+  .subscribe input:focus { outline: 2px solid var(--ember); outline-offset: 1px; }
+
+  /* Credits */
+  .credits { width: 100%; border-collapse: collapse; margin-top: 32px; font-size: 14px; }
+  .credits th, .credits td { text-align: left; padding: 12px 10px; border-top: 1px solid var(--line); vertical-align: top; }
+  .credits th { color: var(--muted); font-weight: 500; font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; }
+  .credits a { word-break: break-word; }
+
+  footer { border-top: 1px solid var(--line); padding: 36px 0 56px; color: var(--muted); font-size: 14px; }
+  footer .wrap { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 16px; }
+  footer .brand { font-size: 18px; }
+
+  /* Reveal */
+  .reveal { opacity: 0; transform: translateY(14px); transition: opacity .8s ease, transform .8s ease; }
+  .reveal.in { opacity: 1; transform: none; }
+
+  /* Responsive */
+  @media (max-width: 920px) {
+    .hero .wrap, .gong, .sensors, .join { grid-template-columns: 1fr; gap: 40px; }
+    .solo-art { order: -1; }
+    .grid-3 { grid-template-columns: 1fr 1fr; }
+    .layers { grid-template-columns: 1fr 1fr; }
+  }
+  @media (max-width: 720px) {
+    section { padding: 72px 0; }
+    .nav { display: none; }
+    .nav.open {
+      display: flex; flex-direction: column; align-items: stretch; gap: 0;
+      position: absolute; top: 60px; left: 0; right: 0; background: var(--ink);
+      border-bottom: 1px solid var(--line);
+    }
+    .nav.open a { padding: 14px 16px; border-top: 1px solid var(--line); color: var(--paper); }
+    .nav.open .pill { margin: 12px 16px; text-align: center; }
+    .menu-btn { display: inline-block; }
+    .grid-3, .layers { grid-template-columns: 1fr; }
+    .steps li { grid-template-columns: 48px 1fr; gap: 12px; }
+    .steps .n { font-size: 34px; }
+    .rules td:first-child { white-space: normal; font-size: 19px; }
+    .rules th:nth-child(2), .rules td:nth-child(2) { display: none; }
+    .hero { padding-top: 56px; }
+    .strike { flex-direction: column; gap: 4px; }
+    .credits th:nth-child(3), .credits td:nth-child(3) { display: none; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    .ring, .core { animation: none; }
+    .reveal { opacity: 1; transform: none; transition: none; }
+  }
+</style>
+</head>
+<body>
+<script>if (location.hash === "#join") location.replace("demo/index.html");</script>
+
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="#top">RESONANCE</a>
+    <nav class="nav" id="nav" aria-label="Main">
+      <a href="#scenarios">Scenarios</a>
+      <a href="#about">About</a>
+      <a href="#how">The journey</a>
+      <a href="#rules">You in the room</a>
+      <a href="#sensors">Ahead</a>
+      <a href="#book">Book</a>
+      <a class="pill" href="demo/index.html">Play a demo</a>
+    </nav>
+    <button class="menu-btn" id="menuBtn" aria-controls="nav" aria-expanded="false">Menu</button>
+  </div>
+</header>
+
+<main id="top">
+
+  <!-- HERO -->
+  <section class="hero">
+    <div class="wrap">
+      <div>
+        <div class="status"><i></i> Live music for stillness and reflection</div>
+        <h1>Music that <em>takes you</em> there.</h1>
+        <p class="lead">RESONANCE is live music for groups and for quiet time alone. Together with the musician, the audience shapes the music as it unfolds, so you can settle into stillness, let your attention soften, and drift wherever your mind needs to go.</p>
+        <p class="lead muted">This is not therapy. It is a space to breathe, settle and listen inward. The journey is yours.</p>
+        <div class="btn-row">
+          <a class="btn primary" href="demo/index.html">Play a demo</a>
+          <a class="btn" href="#scenarios">See the two scenarios</a>
+        </div>
+      </div>
+
+      <figure class="solo-art">
+        <img src="SoloTrumpet-portrait.jpg" alt="A solo trumpeter playing" />
+      </figure>
+    </div>
+  </section>
+
+  <!-- SCENARIOS -->
+  <section id="scenarios">
+    <div class="wrap">
+      <p class="eyebrow reveal">Two scenarios</p>
+      <h2 class="reveal">Gather together, or find your own stillness.</h2>
+      <p class="sub reveal">Two ways to enter: with a live performer and a group, or alone in your own quiet space.</p>
+
+      <div class="grid-2">
+        <article class="card reveal">
+          <h3>A small group session</h3>
+          <p>Step into a small, intimate performance. A live trumpeter is playing in the room and responding to the audience's instinctive input: the music takes the audience to a calm, alert place, before anyone says a word.</p>
+          <p class="mono">For training and coaching groups</p>
+          <a class="btn primary" href="#book" style="margin-top:14px">Book a small group session</a>
+        </article>
+        <article class="card reveal">
+          <h3>Enjoy it on your own</h3>
+          <p>Visit the demo and let the music guide your breath. Sit quietly, wander wherever it leads, and come back whenever you like.</p>
+          <p class="mono">For you, at your own pace</p>
+          <div class="btn-row" style="margin-top:14px">
+            <a class="btn primary" href="demo/index.html">Open the demo</a>
+            <a class="btn" href="#book">Then book a live session</a>
+          </div>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- ABOUT -->
+  <section id="about">
+    <div class="wrap about">
+      <div>
+        <p class="eyebrow reveal">About the performer</p>
+        <h2 class="reveal">Who is in the room with you.</h2>
+      </div>
+      <div class="reveal">
+        <p>Wei Gao builds live music for people who want to slow down and listen.</p>
+        <p>Wei co-founded MetaOrigin, which builds AI tools for music education, and has spent years exploring how people learn to listen.</p>
+        <p>RESONANCE started from a simple question: what happens to a room when the people in it help shape the music?</p>
+        <p>What I have found out, surprisingly, is that people don't just express themselves. They need to collaborate, compromise, and experiment. It is like a metaphor for exploring life and finding beauty in it.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- THE JOURNEY -->
+  <section id="how">
+    <div class="wrap">
+      <p class="eyebrow reveal">How a session unfolds</p>
+      <h2 class="reveal">From settling in to gently returning.</h2>
+      <ol class="steps">
+        <li class="reveal">
+          <span class="n">1</span>
+          <div>
+            <h3>Arrive and settle</h3>
+            <p>The room is quiet and the music begins softly. Nothing is asked of you yet. Simply arrive as you are.</p>
+          </div>
+        </li>
+        <li class="reveal">
+          <span class="n">2</span>
+          <div>
+            <h3>Find your rhythm</h3>
+            <p>Scan a QR code to participate in the music creation. Or wear an EEG to control the music with your mind. In either case, settle into a calm, invigorating state of mind.</p>
+          </div>
+        </li>
+        <li class="reveal">
+          <span class="n">3</span>
+          <div>
+            <h3>Go deeper, or come back</h3>
+            <p>The music moves with the mood of the room, opening when people are ready and softening when they need stillness.</p>
+          </div>
+        </li>
+        <li class="reveal">
+          <span class="n">4</span>
+          <div>
+            <h3>Gently return</h3>
+            <p>The session ends with one soft bell-like sound, an invitation to return to the room, or to yourself, at your own pace.</p>
+          </div>
+        </li>
+      </ol>
+    </div>
+  </section>
+
+  <!-- YOU IN THE ROOM -->
+  <section id="rules">
+    <div class="wrap">
+      <p class="eyebrow reveal">You in the room</p>
+      <h2 class="reveal">Your experience, your pace.</h2>
+      <p class="sub reveal">Join in as much or as little as you like. Nothing is required of you, and nobody is put on the spot.</p>
+      <ul class="checks reveal">
+        <li>Come and go as you wish. Stepping out for a moment is always fine.<small>No explanation is needed.</small></li>
+        <li>Sit, stand or lie down. The music adapts to the space you are in.<small>Eyes open or closed, whichever feels right.</small></li>
+        <li>Choose what you focus on. There is no score and no wrong way to listen.<small>Let your attention wander, and gently bring it back when you notice.</small></li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- AHEAD -->
+  <section id="sensors">
+    <div class="wrap">
+      <p class="eyebrow reveal">Looking ahead</p>
+      <h2 class="reveal">The next step: music that follows your mind.</h2>
+      <p class="reveal">In future sessions, we are collaborating with Stanford Neuroscience to create a wearable EEG device that can read your brain waves and drive the music telepathically. Stay tuned.</p>
+      <div class="ahead-news">
+      <form class="subscribe reveal" id="subscribeForm">
+        <input type="email" name="email" placeholder="Your email address" required autocomplete="email" aria-label="Email address" />
+        <button class="btn primary" type="submit">Subscribe</button>
+      </form>
+      </div>
+    </div>
+  </section>
+
+  <!-- BOOK -->
+  <section id="book">
+    <div class="wrap book">
+      <div>
+        <p class="eyebrow reveal">Book a performance</p>
+        <h2 class="reveal">Bring stillness to your room.</h2>
+        <p class="sub reveal">Concerts, galleries, wellness spaces, festivals and private gatherings. Tell us about the space, the date and the group, and we will reply within a few days.</p>
+        <p class="note reveal">The form opens a pre-filled email. Nothing is stored on this website.</p>
+      </div>
+      <form class="book-form reveal" id="bookForm">
+        <label>Your name<input name="name" required autocomplete="name" /></label>
+        <label>Organisation<input name="organisation" autocomplete="organization" /></label>
+        <label>Email<input name="email" type="email" required autocomplete="email" /></label>
+        <label>Phone (optional)<input name="phone" type="tel" autocomplete="tel" /></label>
+        <label>Type of event
+          <select name="eventType" required>
+            <option value="">Choose one</option>
+            <option>Concert or festival</option>
+            <option>Gallery or installation</option>
+            <option>Wellness or sound-bath session</option>
+            <option>Private gathering</option>
+            <option>Other</option>
+          </select>
+        </label>
+        <label>Expected audience<input name="audience" inputmode="numeric" placeholder="e.g. 40" /></label>
+        <label>Date (or a range)<input name="date" placeholder="e.g. 14 March, or April weekends" /></label>
+        <label>City and venue<input name="venue" placeholder="e.g. Santa Clara, CA" /></label>
+        <label class="wide">Tell us more
+          <textarea name="message" placeholder="The room, what you have in mind, and any technical limits (power, Wi-Fi, space)."></textarea>
+        </label>
+        <button class="btn primary" type="submit">Send request</button>
+      </form>
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  <div class="wrap">
+    <a class="brand" href="#top">RESONANCE<span>.</span></a>
+    <span>Live music for stillness and reflection</span>
+  </div>
+</footer>
+
+<script>
+  // Set this to the public URL of the audience page once the server is deployed
+  // (for example https://resonance-poc.example.com/). Left as localhost for a local show.
+  const APP_URL = "demo/index.html";
+  const appLink = document.getElementById("appLink"); if (appLink) appLink.href = APP_URL;
+
+  // Booking form: opens a pre-filled email to the booking address
+  const BOOKING_EMAIL = "wei@01melody.com";
+  document.getElementById("bookForm").addEventListener("submit", (e) => {
+    e.preventDefault();
+    const f = new FormData(e.target);
+    const v = (k) => (f.get(k) || "").toString().trim() || "-";
+    const body = [
+      "Name: " + v("name"), "Organisation: " + v("organisation"), "Email: " + v("email"), "Phone: " + v("phone"),
+      "Event type: " + v("eventType"), "Expected audience: " + v("audience"), "Date: " + v("date"),
+      "City and venue: " + v("venue"), "", v("message")
+    ].join("\n");
+    const subject = "Booking request: " + v("eventType") + " (" + v("name") + ")";
+    location.href = "mailto:" + BOOKING_EMAIL + "?subject=" + encodeURIComponent(subject) + "&body=" + encodeURIComponent(body);
+  });
+
+  // Newsletter: opens a pre-filled email to the newsletter address
+  const NEWSLETTER_EMAIL = "news@01melody.com";
+  document.getElementById("subscribeForm").addEventListener("submit", (e) => {
+    e.preventDefault();
+    const email = new FormData(e.target).get("email").toString().trim();
+    location.href = "mailto:" + NEWSLETTER_EMAIL + "?subject=" + encodeURIComponent("Subscribe") + "&body=" + encodeURIComponent("Please add me to the RESONANCE newsletter: " + email);
+  });
+
+  // Mobile menu
+  const nav = document.getElementById("nav");
+  const menuBtn = document.getElementById("menuBtn");
+  menuBtn.addEventListener("click", () => {
+    const open = nav.classList.toggle("open");
+    menuBtn.setAttribute("aria-expanded", String(open));
+  });
+  nav.querySelectorAll("a").forEach(a => a.addEventListener("click", () => {
+    nav.classList.remove("open");
+    menuBtn.setAttribute("aria-expanded", "false");
+  }));
+
+  // Reveal on scroll (content stays visible if JavaScript or IntersectionObserver is unavailable)
+  const items = document.querySelectorAll(".reveal");
+  if ("IntersectionObserver" in window) {
+    const io = new IntersectionObserver((entries) => {
+      entries.forEach(e => {
+        if (e.isIntersecting) { e.target.classList.add("in"); io.unobserve(e.target); }
+      });
+    }, { threshold: 0.12, rootMargin: "0px 0px -40px 0px" });
+    items.forEach(el => io.observe(el));
+  } else {
+    items.forEach(el => el.classList.add("in"));
+  }
+</script>
+</body>
+</html>

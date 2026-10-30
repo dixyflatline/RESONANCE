@@ -1,0 +1,11 @@
+{
+  "pack": "core-open",
+  "tempo": 50,
+  "beatsPerBar": 4,
+  "key": "D",
+  "seed": 7,
+  "quantize": "beat",
+  "fadeIn": 8,
+  "fadeOut": 8,
+  "onePager": true
+}
