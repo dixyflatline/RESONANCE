@@ -1115,9 +1115,11 @@
       };
       /* Complexity: layer 0 is one long note per chord (the original sound). Layers 1 and 2 make the bass pulse on the bar's root:
          layer 1 a soft pulse on every beat (quarter notes), layer 2 the pulses in between (eighth notes). The pulses are short, with a touch of the octave above so they carry on small speakers. */
+      const reg = !!(m.rules.registerSplit && m.with && m.with.bass), SUB_LO = 29, SUB_HI = 41; /* with a Bass: the Sub lives in F1 to F2 (44 to 87 Hz), the Bass above it from F#2 (see mbass) */
+      const intoSub = (n) => { while (n < SUB_LO) n += 12; while (n > SUB_HI) n -= 12; return n; };
       /* A Sub that follows the melodic template's chords pulses on each bar's own chord root (not on the ambient plan's D and A, which rub against the Bass and the Chords). */
       const ownAll = !!(m.follow && m.rules.followProg && !strict), barRoot = [];
-      if (ownAll) m.forProg((chord, t0, seg) => { const pc = (((chord[0]) % 12) + 12) % 12; let r = m.root - 12; for (let n = m.root - 12; n <= m.root + 7; n++) if ((((n - m.root) % 12) + 12) % 12 === pc) { r = n; break; } for (let q = Math.round(t0 / m.bar); q < Math.round((t0 + seg) / m.bar); q++) barRoot[q] = r; });
+      if (ownAll) m.forProg((chord, t0, seg) => { const pc = (((chord[0]) % 12) + 12) % 12; let r = m.root - 12; for (let n = m.root - 12; n <= m.root + 7; n++) if ((((n - m.root) % 12) + 12) % 12 === pc) { r = n; break; } if (reg) r = intoSub(r); for (let q = Math.round(t0 / m.bar); q < Math.round((t0 + seg) / m.bar); q++) barRoot[q] = r; });
       const oct = m.rules.subOctave !== false; /* (the kit rule subOctave: the quiet octave above the pulses, which can rub against a melody that sits just above the Sub) */
       const extras = () => {
         for (let b = 0; b < nBars; b++) {
@@ -1139,7 +1141,7 @@
           const rr = mulberry32(hash(`${m.seed}:subtpl:${si}:${ci}`));
           const pcs = (split ? [chord[0], chord[2] ?? chord[0] + 7] : chord.slice(0, 3)).map(pcOf), soft = ownChords && !m.ambient ? [] : [...((m.plan.pad && m.plan.pad[ci]) || []), ...((m.plan.atmos && m.plan.atmos[ci]) || []), ...((m.plan.arp && m.plan.arp[ci]) || [])];
           /* Only the chord's root, 3rd and 5th (the safe notes of a bass): the root is the anchor, the 3rd and 5th are the alternatives. A note is dropped when it clashes with the drone or the upper parts; if that leaves nothing, the clash test is relaxed. */
-          const all = []; for (let n = root - 12; n <= root + 7; n++) if (pcs.includes(pcOf(n - root))) all.push(n); /* (the chord's tones are offsets from the key's tonic) */
+          const lo = reg ? SUB_LO : root - 12, hi = reg ? SUB_HI : root + 7, all = []; for (let n = lo; n <= hi; n++) if (pcs.includes(pcOf(n - root))) all.push(n); /* (the chord's tones are offsets from the key's tonic) */
           let low = all.filter((n) => !drone.some((h) => [1, 2].includes(Math.abs(n - h))) && !blocked(n, [], soft));
           if (!low.length) low = all.filter((n) => !drone.some((h) => [1, 2].includes(Math.abs(n - h))));
           if (!low.length) low = all;
@@ -1155,7 +1157,7 @@
             const r1 = rr(), r2 = rr(), a0 = anc[Math.floor(r1 * anc.length)];
             let n = a0;
             if (kind === 'c') n = alt.length && r2 < 0.65 ? alt[Math.floor(r2 / 0.65 * alt.length)] : anc[(anc.indexOf(a0) + 1) % anc.length] ?? a0;
-            else if (kind === 'o') n = a0 + 12 <= root + 7 ? a0 + 12 : a0;
+            else if (kind === 'o') n = a0 + 12 <= hi ? a0 + 12 : a0;
             else if (kind === 'k') n = pool[(kStep++ + ci) % pool.length];
             if (m.want(0)) note(t0 + b * B, d * B, n, { attack: Math.min(0.3, d * B * 0.3), release: 0.9 + r2 * 0.8 });
           }
@@ -1356,7 +1358,9 @@
       const evs = [];
       m.forProg((chord, t, seg) => {
         const split = m.rules.lowSplit && m.with && m.with.sub; /* with a Sub in the same register, a 3rd would rub against its root: the Bass keeps to root and fifth then */
-        const tone = (i) => m.root - 12 + chord[split && i === 1 ? 0 : Math.min(i, 2)]; /* only the chord's root, 3rd and 5th */
+        const regB = !!(m.rules.registerSplit && m.with && m.with.sub); /* with a Sub: the Bass keeps above it, F#2 to F#3 (93 to 185 Hz); the Sub takes F1 to F2 */
+        const intoBass = (n) => { while (n < 42) n += 12; while (n > 54) n -= 12; return n; };
+        const tone = (i) => { const n = m.root - 12 + chord[split && i === 1 ? 0 : Math.min(i, 2)]; return regB ? intoBass(n) : n; }; /* only the chord's root, 3rd and 5th */
         /* Complexity: layer 0 the long note, layers 1 and 2 the hits of the rhythm template (the original: a pluck on every bar and one in the middle) */
         if (m.want(0)) evs.push({ t, d: seg, n: tone(0), gain: 0.14, sus: true, lv: 0, line: 0, join: undefined });
         for (let b = 0; b < Math.round(seg / m.bar); b++) for (const [beat, len, lv, ti2] of tpl.h) {
@@ -1519,7 +1523,7 @@
       },
       forChords(fn) { if (custom) { custom.chords.forEach((c, i) => fn(prog[i], c.start * bar, c.len * bar, i)); return; } const n = Math.max(1, Math.round(L / seg)); for (let i = 0; i < n; i++) fn(CHORDS[i % 4], i * seg, seg, i % 4); },
     };
-    m.rules = { lowSplit: true, followProg: true, upperRub: true, subOctave: true, ...(opts.rules || {}) }; m.with = opts.with || null; m.follow = !!opts.follow; /* the kit's note rules, which other stems share the low register, and a Sub that plays the melodic template's chords */
+    m.rules = { lowSplit: true, followProg: true, upperRub: true, subOctave: true, registerSplit: true, ...(opts.rules || {}) }; m.with = opts.with || null; m.follow = !!opts.follow; /* the kit's note rules, which other stems share the low register, and a Sub that plays the melodic template's chords */
     m.voice = opts.voice || null; m.sample = opts.voiceSample || null; m.tpl = opts.tpl || null; /* the stem's voice (see playEvents), its recorded note, and a forced rhythm template (Pulse / Sub) */
     m.seed = seed; m.id = id; m.samples = opts.samples || {}; m.pattern = opts.pattern || null; /* beats: the decoded one-shots and the pack's patterns */
     build(ctx, out, verb, m);

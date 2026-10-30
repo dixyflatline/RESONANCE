@@ -6,7 +6,8 @@
     "lowSplit": true,
     "followProg": true,
     "upperRub": true,
-    "subOctave": false
+    "subOctave": false,
+    "registerSplit": true
   },
   "voices": {
     "chords": "pluck",
